@@ -4,7 +4,7 @@ const MAP_H = 60;
 
 const TILE = { GRASS: 0, PATH: 1, WATER: 2, TREE: 3 };
 
-const TICKS_PER_DAY = 300;
+const TICKS_PER_DAY = 900;
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
                 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
@@ -16,6 +16,14 @@ const BDEF = {
     isPath: true,
     color: '#c8b890',
     description: 'Trace un chemin pour guider les visiteurs. Maintenez le clic et faites glisser.',
+  },
+  bulldoze: {
+    name: 'Défricher', w: 1, h: 1,
+    cost: { money: 20 },
+    icon: '🪓',
+    isBulldoze: true,
+    color: '#8B5A2B',
+    description: 'Coupe un arbre (20💵). Cliquez sur un arbre.',
   },
   entrance: {
     name: 'Entrée', w: 4, h: 3,
@@ -124,8 +132,18 @@ const BDEF = {
     cost: { money: 600 },
     icon: '👷',
     color: '#4a7030', roofColor: '#2a5010',
+    isStaffBuilding: true, staffType: 'keeper',
     wage_day: 30,
-    description: 'Soigneur: coûte 30💵/jour. Nécessaire pour les animaux.',
+    description: 'Soigneur: améliore la santé des animaux et la réputation (30💵/j).',
+  },
+  cleaner_hut: {
+    name: 'Loge Nettoyeur', w: 2, h: 2,
+    cost: { money: 400 },
+    icon: '🧹',
+    color: '#a08060', roofColor: '#705030',
+    isStaffBuilding: true, staffType: 'cleaner',
+    wage_day: 25,
+    description: 'Emploie un nettoyeur qui entretient les chemins (25💵/j).',
   },
 };
 

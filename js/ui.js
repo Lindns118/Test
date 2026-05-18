@@ -13,6 +13,7 @@ class UI {
     this._elVisitors = document.getElementById('res-visitors');
     this._elRep      = document.getElementById('res-rep');
     this._elTime     = document.getElementById('res-time');
+    this._elTicket   = document.getElementById('res-ticket');
     this._elInfo     = document.getElementById('info-text');
     this._elLog      = document.getElementById('event-log');
     this._elSpeed    = document.getElementById('speed-btn');
@@ -436,6 +437,7 @@ class UI {
     this._elVisitors.textContent = `👥 ${visitorsCount} visiteur${visitorsCount !== 1 ? 's' : ''}`;
     this._elRep.textContent      = `⭐ ${rep}%`;
     this._elTime.textContent     = `📅 ${monthName} An ${year}`;
+    if (this._elTicket) this._elTicket.textContent = `🎫 ${game.ticketPrice}💵`;
 
     // Mobile compact
     this._mMoney.textContent    = `💵${Math.floor(money)}`;
@@ -450,6 +452,10 @@ class UI {
       const ok = Object.entries(def.cost).every(([r, v]) => (game.resources[r] || 0) >= v);
       btn.classList.toggle('cannot-afford', !ok);
     });
+  }
+
+  updateTicketDisplay() {
+    if (this._elTicket) this._elTicket.textContent = `🎫 ${this.game.ticketPrice}💵`;
   }
 
   // ─── Notifications ───────────────────────────────────────

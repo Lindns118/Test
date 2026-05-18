@@ -148,15 +148,15 @@ function findPathWeighted(game, sx, sy, tx, ty) {
       if (nx !== tx || ny !== ty) {
         let blocked = false;
         for (const b of game.buildings) {
-          if (!b.def.isEnclosure && !b.def.isPath && b.type !== 'entrance' && b.type !== 'bench' && b.type !== 'toilets') {
+          if (!b.def.isPath && b.type !== 'entrance' && b.type !== 'bench' && b.type !== 'toilets' && b.type !== 'cleaner_hut') {
             if (b.occupies(nx, ny)) { blocked = true; break; }
           }
         }
         if (blocked) continue;
       }
 
-      // Cost: PATH = 1, GRASS = 3
-      const stepCost = (tile === TILE.PATH) ? 1 : 3;
+      // Cost: PATH = 1, GRASS = 20
+      const stepCost = (tile === TILE.PATH) ? 1 : 20;
       const tentG = (gScore.get(ck) || 0) + stepCost;
       if (tentG >= (gScore.get(nk) ?? Infinity)) continue;
 

@@ -11,8 +11,10 @@ class Game {
     this.buildings = [];
     this.animals = [];    // flat list of all animals
     this.visitors = [];   // active visitors
+    this.employees = [];
 
     this.resources = { money: 3000 };
+    this.ticketPrice = 15;
     this.reputation = 40; // 0-100
     this.time = 0;
     this.dayTimer = 0;
@@ -93,6 +95,9 @@ class Game {
 
     // Update animals
     for (const a of this.animals) a.update();
+
+    // Update employees
+    for (const emp of this.employees) emp.update(this);
 
     // Update visitors
     for (const v of this.visitors) {
@@ -176,9 +181,7 @@ class Game {
 
   onVisitorLeave(visitor) {
     // Ticket revenue
-    const entrance = this.buildings.find(b => b.type === 'entrance');
-    const ticket = entrance ? (entrance.def.ticket || 15) : 15;
-    this.resources.money += ticket;
+    this.resources.money += this.ticketPrice;
 
     // Reputation impact based on happiness
     if (visitor.happiness > 65) {
@@ -256,6 +259,24 @@ class Game {
   }
 
   tryPlaceBuilding(type, x, y) {
+    const def = BDEF[type];
+
+    if (def && def.isBulldoze) {
+      const tile = this.map.getTile(x, y);
+      if (tile !== TILE.TREE) {
+        this.ui.showInfo('❌ Cliquez sur un arbre à couper !', true);
+        return false;
+      }
+      if ((this.resources.money || 0) < def.cost.money) {
+        this.ui.showInfo('❌ Ressources insuffisantes !', true);
+        return false;
+      }
+      this.resources.money -= def.cost.money;
+      this.map.setTile(x, y, TILE.GRASS);
+      this.ui.showInfo('🪓 Arbre coupé !');
+      return true;
+    }
+
     // Entrance: only one allowed
     if (type === 'entrance' && this.buildings.find(b => b.type === 'entrance')) {
       this.ui.showInfo('❌ L\'entrée est déjà placée !', true);
@@ -269,8 +290,6 @@ class Game {
       }
       return false;
     }
-
-    const def = BDEF[type];
 
     // Check resources
     for (const [r, v] of Object.entries(def.cost)) {
@@ -307,7 +326,17 @@ class Game {
       b.spawnAnimals(this);
     }
 
+    if (b.def.isStaffBuilding) {
+      const emp = new Employee(b.def.staffType, b, this);
+      this.employees.push(emp);
+    }
+
     return b;
+  }
+
+  setTicketPrice(delta) {
+    this.ticketPrice = Math.max(5, Math.min(50, this.ticketPrice + delta));
+    this.ui.updateTicketDisplay();
   }
 
   // ─── Restart ─────────────────────────────────────────────────────
@@ -317,15 +346,18 @@ class Game {
 
     _buildingId = 0;
     _visitorId  = 0;
+    _employeeId = 0;
 
     this.map = new GameMap(MAP_W, MAP_H);
     this.buildings = [];
     this.animals = [];
     this.visitors = [];
+    this.employees = [];
     this.resources = { money: 3000 };
     this.reputation = 40;
     this.time = 0;
     this.dayTimer = 0;
+    this.ticketPrice = 15;
 
     this.camera = { x: 0, y: 0, zoom: 1 };
 

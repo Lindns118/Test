@@ -79,6 +79,10 @@ html, body {
   background: transparent !important;
 }
 
+.ticket-row { display:flex; align-items:center; gap:6px; grid-column: 1 / -1; }
+.ticket-row button { background:#2a4020; color:#a0d860; border:1px solid #3a5030; border-radius:4px; width:22px; height:22px; cursor:pointer; font-size:14px; line-height:1; }
+.ticket-row button:hover { background:#3a5030; }
+
 #top-btns {
   display: flex;
   gap: 6px;

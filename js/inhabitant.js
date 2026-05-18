@@ -38,6 +38,10 @@ class Visitor {
 
     // Revenue ticket flag (only paid once at entrance)
     this._ticketPaid = false;
+
+    this._soughtBench = false;
+    this._usedToilet = false;
+    this._restTimer = 0;
   }
 
   get tileX() { return Math.floor(this.x / TILE_SIZE); }
@@ -65,6 +69,12 @@ class Visitor {
       case 'leaving':
         this._updateLeaving(game);
         break;
+      case 'resting':
+        this._updateResting(game);
+        break;
+      case 'going_toilet':
+        this._updateGoingToilet(game);
+        break;
     }
 
     this._move();
@@ -75,6 +85,39 @@ class Visitor {
     if (this.energy <= 0 || this.wishList.length === 0) {
       this._startLeaving(game);
       return;
+    }
+
+    // Seek bench if energy low
+    if (this.energy < 35 && !this._soughtBench) {
+      const benches = game.buildings.filter(b => b.def.isBench);
+      if (benches.length > 0) {
+        const bench = benches.reduce((best, b) => {
+          const dx = b.x * TILE_SIZE - this.x, dy = b.y * TILE_SIZE - this.y;
+          const d2 = dx*dx + dy*dy;
+          const bd = (()=>{ const bx=best.x*TILE_SIZE-this.x, by=best.y*TILE_SIZE-this.y; return bx*bx+by*by; })();
+          return d2 < bd ? b : best;
+        });
+        this._soughtBench = true;
+        this.currentTarget = bench;
+        this._pathToBuilding(game, bench);
+        this.state = 'resting';
+        this.stateTimer = 0;
+        this._restTimer = 0;
+        return;
+      }
+    }
+
+    // Seek toilet if visited 2+ enclosures and toilets exist
+    if (!this._usedToilet && this.visited.size >= 2) {
+      const toilets = game.buildings.filter(b => b.type === 'toilets');
+      if (toilets.length > 0) {
+        const toilet = toilets[0];
+        this._usedToilet = true;
+        this._pathToBuilding(game, toilet);
+        this.state = 'going_toilet';
+        this.stateTimer = 0;
+        return;
+      }
     }
 
     // Decide every ~60 ticks
@@ -142,6 +185,26 @@ class Visitor {
       // Reached entrance — leave
       game.onVisitorLeave(this);
       this.alive = false;
+    }
+  }
+
+  _updateResting(game) {
+    this._restTimer = (this._restTimer || 0) + 1;
+    this.energy = Math.min(100, this.energy + 0.4);
+    if (this._restTimer >= 120) {
+      this.state = 'idle';
+      this.stateTimer = 0;
+      this.decideTimer = 60;
+    }
+  }
+
+  _updateGoingToilet(game) {
+    if (this.energy <= 0) { this._startLeaving(game); return; }
+    if (this._isAtTarget()) {
+      this.happiness = Math.min(100, this.happiness + 12);
+      this.state = 'idle';
+      this.stateTimer = 0;
+      this.decideTimer = 60;
     }
   }
 
