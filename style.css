@@ -79,21 +79,36 @@ html, body {
   background: transparent !important;
 }
 
-#speed-btn {
-  display: block;
-  width: calc(100% - 24px);
-  margin: 8px 12px 4px;
-  padding: 6px;
-  background: #1e3050;
-  color: #a0c8ff;
-  border: 1px solid #2e5080;
+#top-btns {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 4px;
+  flex-shrink: 0;
+}
+
+#speed-btn, #restart-btn {
+  flex: 1;
+  padding: 6px 4px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   font-weight: bold;
-  flex-shrink: 0;
+  border: 1px solid;
+}
+
+#speed-btn {
+  background: #1e3050;
+  color: #a0c8ff;
+  border-color: #2e5080;
 }
 #speed-btn:hover { background: #2e4070; }
+
+#restart-btn {
+  background: #301a10;
+  color: #e08050;
+  border-color: #6a3010;
+}
+#restart-btn:hover { background: #4a2810; }
 
 #build-panel {
   padding: 8px 12px 0;
@@ -254,17 +269,26 @@ html, body {
     white-space: nowrap;
   }
 
-  #m-speed {
+  #m-speed, #m-restart {
     padding: 4px 10px;
-    background: #1e3050;
-    color: #a0c8ff;
-    border: 1px solid #2e5080;
     border-radius: 6px;
     font-size: 12px;
     font-weight: bold;
     cursor: pointer;
     min-width: 44px;
     min-height: 32px;
+  }
+
+  #m-speed {
+    background: #1e3050;
+    color: #a0c8ff;
+    border: 1px solid #2e5080;
+  }
+
+  #m-restart {
+    background: #301a10;
+    color: #e08050;
+    border: 1px solid #6a3010;
   }
 
   /* ── Bottom build bar ── */

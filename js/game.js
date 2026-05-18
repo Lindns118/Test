@@ -116,6 +116,28 @@ class Game {
     // Food demand is handled per-inhabitant in Inhabitant.update()
   }
 
+  // ─── Restart ─────────────────────────────────────────────────────
+
+  restart() {
+    if (!confirm('Recommencer depuis le début ?')) return;
+
+    this.map = new GameMap(MAP_W, MAP_H);
+    this.buildings = [];
+    this.inhabitants = [];
+    this.resources = { wood: 60, food: 50, gold: 25 };
+    this.time = 0;
+
+    // Reset camera to default
+    this.camera = { x: 0, y: 0, zoom: 1 };
+
+    // Clear UI state
+    this.ui._deselect();
+    this.ui._elLog.innerHTML = '';
+    this.ui._showToast('Nouvelle partie !');
+
+    this._init();
+  }
+
   // ─── Building Placement ──────────────────────────────────────────
 
   canPlaceBuilding(type, x, y) {

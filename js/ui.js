@@ -34,6 +34,7 @@ class UI {
     this._setupCanvas();
     this._setupSpeedBtns();
     this._setupMobileCancel();
+    this._setupRestartBtns();
   }
 
   // ─── Button builders ─────────────────────────────────────
@@ -276,6 +277,11 @@ class UI {
 
   _setupMobileCancel() {
     this._mCancel.addEventListener('click', () => this._deselect());
+  }
+
+  _setupRestartBtns() {
+    document.getElementById('restart-btn').addEventListener('click', () => this.game.restart());
+    document.getElementById('m-restart').addEventListener('click',   () => this.game.restart());
   }
 
   // ─── Camera helpers ──────────────────────────────────────
