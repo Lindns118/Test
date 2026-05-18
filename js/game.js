@@ -190,7 +190,7 @@ class Game {
 
   // ─── Building Placement ──────────────────────────────────────────
 
-  canPlaceBuilding(type, x, y) {
+  canPlaceBuilding(type, x, y, excludeId = null) {
     const def = BDEF[type];
     if (!def) return false;
     if (x < 0 || y < 0 || x + def.w > MAP_W || y + def.h > MAP_H) return false;
@@ -209,13 +209,49 @@ class Game {
       }
     }
 
-    // No overlap with existing buildings
+    // No overlap with existing buildings (skip the building being moved)
     for (const b of this.buildings) {
+      if (excludeId !== null && b.id === excludeId) continue;
       if (x < b.x + b.w && x + def.w > b.x &&
           y < b.y + b.h && y + def.h > b.y) {
         return false;
       }
     }
+    return true;
+  }
+
+  moveBuilding(building, x, y) {
+    if (!this.canPlaceBuilding(building.type, x, y, building.id)) {
+      this.ui.showInfo('❌ Impossible de déplacer ici !', true);
+      return false;
+    }
+
+    // Restore old footprint to GRASS
+    for (let dy = 0; dy < building.h; dy++) {
+      for (let dx = 0; dx < building.w; dx++) {
+        const t = this.map.getTile(building.x + dx, building.y + dy);
+        if (t !== TILE.WATER && t !== TILE.TREE) {
+          this.map.setTile(building.x + dx, building.y + dy, TILE.GRASS);
+        }
+      }
+    }
+
+    building.x = x;
+    building.y = y;
+    this.map.clearForBuilding(x, y, building.w, building.h);
+
+    // Reposition animals inside enclosure
+    if (building.def.isEnclosure) {
+      const margin = TILE_SIZE;
+      for (const a of building.animals) {
+        a.x = building.x * TILE_SIZE + margin + Math.random() * (building.w * TILE_SIZE - margin * 2);
+        a.y = building.y * TILE_SIZE + margin + Math.random() * (building.h * TILE_SIZE - margin * 2);
+        a.targetX = a.x;
+        a.targetY = a.y;
+      }
+    }
+
+    this.ui.showInfo(`✅ ${building.def.name} déplacée !`);
     return true;
   }
 

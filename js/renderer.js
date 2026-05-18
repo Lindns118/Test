@@ -383,11 +383,31 @@ class Renderer {
 
   _drawGhost() {
     const { ctx, game } = this;
-    const { selectedBuildType, hx, hy } = game.ui;
-    if (!selectedBuildType || hx < 0) return;
+    const { selectedBuildType, movingBuilding, hx, hy } = game.ui;
+    const ghostType = selectedBuildType || (movingBuilding ? movingBuilding.type : null);
 
-    const def = BDEF[selectedBuildType];
-    const canPlace = game.canPlaceBuilding(selectedBuildType, hx, hy);
+    // Highlight hovered building when idle (no selection, no move)
+    if (!ghostType && hx >= 0) {
+      const hovered = game.buildings.find(b =>
+        b.type !== 'entrance' &&
+        hx >= b.x && hx < b.x + b.w &&
+        hy >= b.y && hy < b.y + b.h
+      );
+      if (hovered) {
+        ctx.strokeStyle = 'rgba(255,255,100,0.75)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(hovered.x * TILE_SIZE, hovered.y * TILE_SIZE, hovered.w * TILE_SIZE, hovered.h * TILE_SIZE);
+        ctx.setLineDash([]);
+      }
+      return;
+    }
+
+    if (!ghostType || hx < 0) return;
+
+    const excludeId = movingBuilding ? movingBuilding.id : null;
+    const def = BDEF[ghostType];
+    const canPlace = game.canPlaceBuilding(ghostType, hx, hy, excludeId);
     const px = hx * TILE_SIZE, py = hy * TILE_SIZE;
     const bw = def.w * TILE_SIZE, bh = def.h * TILE_SIZE;
 
@@ -400,7 +420,6 @@ class Renderer {
     ctx.strokeRect(px, py, bw, bh);
     ctx.setLineDash([]);
 
-    // Show icon in ghost
     ctx.font = `${Math.min(bw, bh) * 0.4}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

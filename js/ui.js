@@ -4,6 +4,7 @@ class UI {
   constructor(game) {
     this.game = game;
     this.selectedBuildType = null;
+    this.movingBuilding = null;
     this.hx = -1;
     this.hy = -1;
 
@@ -102,6 +103,7 @@ class UI {
 
   _deselect() {
     this.selectedBuildType = null;
+    this.movingBuilding = null;
     document.querySelectorAll('[data-type]').forEach(b => b.classList.remove('active'));
     this._elInfo.textContent = 'Sélectionnez un bâtiment, puis cliquez sur la carte.';
     this._mCancel.classList.add('hidden');
@@ -154,6 +156,27 @@ class UI {
     canvas.addEventListener('mouseup', (e) => {
       if (!moved && this.selectedBuildType && this.selectedBuildType !== 'path') {
         this.game.tryPlaceBuilding(this.selectedBuildType, this.hx, this.hy);
+      } else if (!moved && !this.selectedBuildType) {
+        if (this.movingBuilding) {
+          if (this.game.moveBuilding(this.movingBuilding, this.hx, this.hy)) {
+            this.movingBuilding = null;
+            this._elInfo.textContent = 'Sélectionnez un bâtiment, puis cliquez sur la carte.';
+            this._mCancel.classList.add('hidden');
+          }
+        } else {
+          const b = this.game.buildings.find(b =>
+            b.type !== 'entrance' &&
+            this.hx >= b.x && this.hx < b.x + b.w &&
+            this.hy >= b.y && this.hy < b.y + b.h
+          );
+          if (b) {
+            this.movingBuilding = b;
+            const msg = `🔄 ${b.def.name} — cliquez sur la destination (Échap pour annuler)`;
+            this._elInfo.textContent = msg;
+            this._showToast(`🔄 Déplacer : ${b.def.name}`);
+            this._mCancel.classList.remove('hidden');
+          }
+        }
       }
       dragging = false;
       _isPainting = false;
@@ -274,20 +297,55 @@ class UI {
 
     canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
+      const prevCount = Object.keys(touches).length;
       for (const t of e.changedTouches) {
         delete touches[t.identifier];
       }
+      const nowCount = Object.keys(touches).length;
 
-      if (Object.keys(touches).length < 2) pinchDist0 = 0;
+      if (nowCount < 2) pinchDist0 = 0;
 
-      // Tap = place building (non-path)
-      if (!touchMoved && this.selectedBuildType && this.selectedBuildType !== 'path' && e.changedTouches.length > 0) {
-        const t = e.changedTouches[0];
-        this._updateHoverPx(t.clientX, t.clientY);
-        this.game.tryPlaceBuilding(this.selectedBuildType, this.hx, this.hy);
+      // Pinch released to single finger: reset pan origin to avoid camera jump
+      if (prevCount === 2 && nowCount === 1) {
+        const remaining = Object.values(touches)[0];
+        touchStart = { x: remaining.x, y: remaining.y };
+        camStartT  = { x: this.game.camera.x, y: this.game.camera.y };
+        touchMoved = true; // prevent accidental tap-to-place
+        _isTouchPainting = false;
       }
 
-      if (Object.keys(touches).length === 0) {
+      // Tap = place or move building
+      if (!touchMoved && e.changedTouches.length > 0) {
+        const t = e.changedTouches[0];
+        this._updateHoverPx(t.clientX, t.clientY);
+
+        if (this.selectedBuildType && this.selectedBuildType !== 'path') {
+          this.game.tryPlaceBuilding(this.selectedBuildType, this.hx, this.hy);
+        } else if (!this.selectedBuildType) {
+          if (this.movingBuilding) {
+            if (this.game.moveBuilding(this.movingBuilding, this.hx, this.hy)) {
+              this.movingBuilding = null;
+              this._elInfo.textContent = 'Sélectionnez un bâtiment, puis cliquez sur la carte.';
+              this._mCancel.classList.add('hidden');
+            }
+          } else {
+            const b = this.game.buildings.find(b =>
+              b.type !== 'entrance' &&
+              this.hx >= b.x && this.hx < b.x + b.w &&
+              this.hy >= b.y && this.hy < b.y + b.h
+            );
+            if (b) {
+              this.movingBuilding = b;
+              const msg = `🔄 ${b.def.name} — tapez sur la destination`;
+              this._elInfo.textContent = msg;
+              this._showToast(`🔄 Déplacer : ${b.def.name}`);
+              this._mCancel.classList.remove('hidden');
+            }
+          }
+        }
+      }
+
+      if (nowCount === 0) {
         touchMoved = false;
         _isTouchPainting = false;
       }
