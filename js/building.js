@@ -9,25 +9,14 @@ class Building {
     this.def = BDEF[type];
     this.w = this.def.w;
     this.h = this.def.h;
-    this.workers = [];
-    this.residents = [];
-    this.active = false;
-    this.produceTimer = 0;
-    this.searchRadius = type === 'sawmill' ? 10 : 0;
+
+    // For enclosures: list of Animal objects
+    this.animals = [];
   }
 
-  get needsWorkers() { return this.workers.length < this.def.workers_needed; }
-  get isHouse() { return this.type === 'house'; }
-  get workerRatio() {
-    if (this.def.workers_needed === 0) return 1;
-    return this.workers.length / this.def.workers_needed;
-  }
-
-  get entryTile() {
-    return {
-      x: this.x + Math.floor(this.w / 2),
-      y: this.y + this.h,
-    };
+  occupies(x, y) {
+    return x >= this.x && x < this.x + this.w &&
+           y >= this.y && y < this.y + this.h;
   }
 
   get centerPx() {
@@ -37,69 +26,33 @@ class Building {
     };
   }
 
-  occupies(x, y) {
-    return x >= this.x && x < this.x + this.w &&
-           y >= this.y && y < this.y + this.h;
+  // Tile just below the building center (entry point for visitors)
+  get entryTile() {
+    return {
+      x: this.x + Math.floor(this.w / 2),
+      y: this.y + this.h,
+    };
+  }
+
+  // For entrance: tile just below the building (exit for visitors going out)
+  get entranceTile() {
+    return {
+      x: this.x + Math.floor(this.w / 2),
+      y: this.y + this.h,
+    };
+  }
+
+  spawnAnimals(game) {
+    if (!this.def.isEnclosure) return;
+    this.animals = [];
+    for (let i = 0; i < this.def.count; i++) {
+      const a = new Animal(this.def.animal, this);
+      this.animals.push(a);
+      game.animals.push(a);
+    }
   }
 
   update(game) {
-    this.active = this.def.workers_needed === 0 || this.workers.length >= 1;
-
-    if (!this.active || !this.def.produces) return;
-
-    this.produceTimer++;
-    const interval = Math.ceil(this.def.produce_interval / Math.max(0.1, this.workerRatio));
-    if (this.produceTimer < interval) return;
-    this.produceTimer = 0;
-
-    for (const [res, amt] of Object.entries(this.def.produces)) {
-      game.resources[res] = (game.resources[res] || 0) + amt * this.workerRatio;
-    }
-
-    if (this.type === 'sawmill') {
-      this._harvestNearbyTree(game);
-    }
-  }
-
-  _harvestNearbyTree(game) {
-    const cx = this.x + Math.floor(this.w / 2);
-    const cy = this.y + Math.floor(this.h / 2);
-    for (let dy = -this.searchRadius; dy <= this.searchRadius; dy++) {
-      for (let dx = -this.searchRadius; dx <= this.searchRadius; dx++) {
-        const tx = cx + dx, ty = cy + dy;
-        if (game.map.isTree(tx, ty)) {
-          game.resources.wood += game.map.cutTree(tx, ty);
-          return;
-        }
-      }
-    }
-  }
-
-  addWorker(inh) {
-    if (!this.needsWorkers) return false;
-    this.workers.push(inh);
-    inh.job = this.def.job || null;
-    inh.workplace = this;
-    return true;
-  }
-
-  removeWorker(inh) {
-    this.workers = this.workers.filter(w => w !== inh);
-    if (inh.workplace === this) {
-      inh.workplace = null;
-      inh.job = null;
-    }
-  }
-
-  addResident(inh) {
-    if (this.residents.length >= (this.def.capacity || 4)) return false;
-    this.residents.push(inh);
-    inh.home = this;
-    return true;
-  }
-
-  removeResident(inh) {
-    this.residents = this.residents.filter(r => r !== inh);
-    if (inh.home === this) inh.home = null;
+    // Building-level logic (currently handled at game level)
   }
 }

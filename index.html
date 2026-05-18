@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Village Médiéval</title>
+  <title>Zoo Manager</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,11 +16,10 @@
   <!-- ═══ DESKTOP: panneau latéral ═══ -->
   <div id="ui">
     <div id="resources">
-      <span id="res-wood">🪵 60</span>
-      <span id="res-food">🌾 50</span>
-      <span id="res-gold">💰 25</span>
-      <span id="res-pop">👥 4</span>
-      <span id="res-time">An 1 · Printemps</span>
+      <span id="res-money">💵 3 000</span>
+      <span id="res-visitors">👥 0 visiteurs</span>
+      <span id="res-rep">⭐ 40%</span>
+      <span id="res-time">📅 Janvier An 1</span>
     </div>
     <div id="top-btns">
       <button id="speed-btn">▶ x1</button>
@@ -42,13 +41,12 @@
   <!-- ═══ MOBILE: HUD en overlay ═══ -->
   <div id="m-hud">
     <div id="m-res">
-      <span id="m-wood">🪵 60</span>
-      <span id="m-food">🌾 50</span>
-      <span id="m-gold">💰 25</span>
-      <span id="m-pop">👥 4</span>
+      <span id="m-money">💵3000</span>
+      <span id="m-visitors">👥0</span>
+      <span id="m-rep">⭐40</span>
     </div>
     <div id="m-right">
-      <span id="m-time">An 1</span>
+      <span id="m-time">Jan An1</span>
       <button id="m-speed">▶</button>
       <button id="m-restart">🔄</button>
     </div>
@@ -68,6 +66,7 @@
 <script src="js/map.js"></script>
 <script src="js/pathfinding.js"></script>
 <script src="js/building.js"></script>
+<script src="js/animal.js"></script>
 <script src="js/inhabitant.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/ui.js"></script>

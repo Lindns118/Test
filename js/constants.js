@@ -2,112 +2,146 @@ const TILE_SIZE = 32;
 const MAP_W = 80;
 const MAP_H = 60;
 
-const TILE = { GRASS: 0, TREE: 1, WATER: 2, ROCK: 3 };
+const TILE = { GRASS: 0, PATH: 1, WATER: 2, TREE: 3 };
 
-const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver'];
-const TICKS_PER_YEAR = 1200;
-const TICKS_PER_SEASON = TICKS_PER_YEAR / 4;
-
-const AGE_ADULT = 16;
-const AGE_SENIOR = 55;
-const AGE_MAX = 72;
-
-const GENDER = { M: 0, F: 1 };
+const TICKS_PER_DAY = 300;
+const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 const BDEF = {
-  house: {
-    name: 'Maison', w: 2, h: 2,
-    cost: { wood: 8 },
-    color: '#c8784a', roofColor: '#a05530',
-    capacity: 4, workers_needed: 0,
-    icon: '🏠',
-    description: 'Loge 4 habitants.'
+  path: {
+    name: 'Chemin', w: 1, h: 1,
+    cost: { money: 5 },
+    icon: '🛤️',
+    isPath: true,
+    color: '#c8b890',
+    description: 'Trace un chemin pour guider les visiteurs. Maintenez le clic et faites glisser.',
   },
-  sawmill: {
-    name: 'Scierie', w: 3, h: 2,
-    cost: { wood: 15 },
-    color: '#7a5a18', roofColor: '#5a3e0c',
-    workers_needed: 2, job: 'lumberjack',
-    produce_interval: 25, produces: { wood: 1 },
-    icon: '🪚',
-    description: 'Emploie 2 bûcherons. Coupe les arbres proches.'
+  entrance: {
+    name: 'Entrée', w: 4, h: 3,
+    cost: { money: 0 },
+    icon: '🎪',
+    ticket: 15,
+    color: '#e0a020', roofColor: '#b07010',
+    description: 'Entrée principale du zoo. Unique. Les visiteurs entrent et sortent ici.',
   },
-  farm: {
-    name: 'Ferme', w: 3, h: 3,
-    cost: { wood: 18 },
-    color: '#8ab040', roofColor: '#6a8a20',
-    workers_needed: 3, job: 'farmer',
-    produce_interval: 35, produces: { food: 3 },
-    icon: '🌾',
-    description: 'Emploie 3 agriculteurs. Produit de la nourriture.'
+  lion_enclosure: {
+    name: 'Enclos Lions', w: 5, h: 5,
+    cost: { money: 2000 },
+    icon: '🦁',
+    isEnclosure: true, animal: 'lion', count: 2,
+    popularity: 12, food_day: 30,
+    color: '#c89040', fenceColor: '#6a4010',
+    description: 'Héberge 2 lions. Très populaire. (pop:12, nourriture:30💵/j)',
   },
-  market: {
-    name: 'Marché', w: 2, h: 2,
-    cost: { wood: 12, gold: 5 },
-    color: '#d4b030', roofColor: '#b09010',
-    workers_needed: 2, job: 'merchant',
-    icon: '🏪',
-    description: 'Emploie 2 marchands. Améliore le bonheur (+5).'
+  elephant_enclosure: {
+    name: 'Enclos Éléphants', w: 6, h: 6,
+    cost: { money: 3500 },
+    icon: '🐘',
+    isEnclosure: true, animal: 'elephant', count: 3,
+    popularity: 18, food_day: 50,
+    color: '#909898', fenceColor: '#505858',
+    description: 'Héberge 3 éléphants. Très grande attraction. (pop:18, nourriture:50💵/j)',
   },
-  tavern: {
-    name: 'Taverne', w: 2, h: 2,
-    cost: { wood: 14, gold: 8 },
-    color: '#b84830', roofColor: '#902810',
-    workers_needed: 2, job: 'tavernkeeper',
-    icon: '🍺',
-    description: 'Emploie 2 taverniers. Augmente le moral (+10).'
+  giraffe_enclosure: {
+    name: 'Enclos Girafes', w: 5, h: 6,
+    cost: { money: 2800 },
+    icon: '🦒',
+    isEnclosure: true, animal: 'giraffe', count: 2,
+    popularity: 14, food_day: 35,
+    color: '#d4b060', fenceColor: '#706020',
+    description: 'Héberge 2 girafes. (pop:14, nourriture:35💵/j)',
   },
-  temple: {
-    name: 'Temple', w: 3, h: 3,
-    cost: { wood: 25, gold: 15 },
-    color: '#b8a0d8', roofColor: '#8870b8',
-    workers_needed: 2, job: 'priest',
-    icon: '⛪',
-    description: 'Emploie 2 prêtres. Apporte la foi.'
+  penguin_pool: {
+    name: 'Bassin Pingouins', w: 4, h: 4,
+    cost: { money: 1500 },
+    icon: '🐧',
+    isEnclosure: true, animal: 'penguin', count: 5,
+    popularity: 10, food_day: 20,
+    color: '#4a8ab0', fenceColor: '#2a5a80',
+    description: 'Héberge 5 pingouins avec piscine. (pop:10, nourriture:20💵/j)',
   },
-  clinic: {
-    name: 'Clinique', w: 2, h: 2,
-    cost: { wood: 16, gold: 10 },
-    color: '#40b880', roofColor: '#208860',
-    workers_needed: 2, job: 'doctor',
-    icon: '⚕️',
-    description: 'Emploie 2 médecins. Soigne les habitants.'
+  monkey_cage: {
+    name: 'Cage Singes', w: 4, h: 4,
+    cost: { money: 1200 },
+    icon: '🐒',
+    isEnclosure: true, animal: 'monkey', count: 4,
+    popularity: 11, food_day: 18,
+    color: '#8a6030', fenceColor: '#4a3010',
+    description: 'Héberge 4 singes très actifs. (pop:11, nourriture:18💵/j)',
   },
-  barracks: {
-    name: 'Caserne', w: 3, h: 2,
-    cost: { wood: 20, gold: 12 },
-    color: '#5878b0', roofColor: '#385890',
-    workers_needed: 4, job: 'guard',
-    icon: '⚔️',
-    description: 'Emploie 4 gardes. Assure la sécurité.'
+  zebra_enclosure: {
+    name: 'Enclos Zèbres', w: 5, h: 5,
+    cost: { money: 2200 },
+    icon: '🦓',
+    isEnclosure: true, animal: 'zebra', count: 3,
+    popularity: 13, food_day: 28,
+    color: '#e8e8e0', fenceColor: '#606060',
+    description: 'Héberge 3 zèbres. (pop:13, nourriture:28💵/j)',
   },
-  tax_office: {
-    name: 'Impôts', w: 2, h: 2,
-    cost: { wood: 12, gold: 20 },
-    color: '#c8a820', roofColor: '#a88000',
-    workers_needed: 2, job: 'taxman',
-    produce_interval: 80, produces: { gold: 2 },
-    icon: '🏛️',
-    description: 'Emploie 2 percepteurs. Collecte de l\'or.'
+  bird_aviary: {
+    name: 'Volière Oiseaux', w: 5, h: 4,
+    cost: { money: 900 },
+    icon: '🦜',
+    isEnclosure: true, animal: 'bird', count: 6,
+    popularity: 7, food_day: 10,
+    color: '#60a860', fenceColor: '#307830',
+    description: 'Héberge 6 oiseaux colorés. (pop:7, nourriture:10💵/j)',
   },
-  warehouse: {
-    name: 'Entrepôt', w: 2, h: 2,
-    cost: { wood: 10 },
-    color: '#907860', roofColor: '#705840',
-    workers_needed: 1, job: 'storeman',
-    icon: '🏗️',
-    description: 'Emploie 1 magasinier. Stocke les ressources (+50% capacité).'
+  restaurant: {
+    name: 'Restaurant', w: 3, h: 3,
+    cost: { money: 800 },
+    icon: '🍽️',
+    color: '#c84030', roofColor: '#902010',
+    revenue_visitor: 8,
+    description: 'Génère 8💵 par visiteur par jour.',
+  },
+  gift_shop: {
+    name: 'Boutique', w: 2, h: 2,
+    cost: { money: 500 },
+    icon: '🎁',
+    color: '#c080c0', roofColor: '#905090',
+    revenue_visitor: 5,
+    description: 'Génère 5💵 par visiteur par jour.',
+  },
+  toilets: {
+    name: 'Toilettes', w: 2, h: 2,
+    cost: { money: 200 },
+    icon: '🚻',
+    color: '#80b0c0', roofColor: '#508090',
+    description: 'Améliore le confort des visiteurs.',
+  },
+  bench: {
+    name: 'Banc', w: 1, h: 1,
+    cost: { money: 60 },
+    icon: '🪑',
+    color: '#a07040',
+    isBench: true,
+    description: 'Banc pour se reposer. Améliore l\'énergie des visiteurs.',
+  },
+  keeper_cabin: {
+    name: 'Cabane Soigneur', w: 3, h: 2,
+    cost: { money: 600 },
+    icon: '👷',
+    color: '#4a7030', roofColor: '#2a5010',
+    wage_day: 30,
+    description: 'Soigneur: coûte 30💵/jour. Nécessaire pour les animaux.',
   },
 };
 
-const JOB_LABELS = {
-  lumberjack:   'Bûcheron',
-  farmer:       'Agriculteur',
-  merchant:     'Marchand',
-  tavernkeeper: 'Tavernier',
-  priest:       'Prêtre',
-  doctor:       'Médecin',
-  guard:        'Garde',
-  taxman:       'Percepteur',
-  storeman:     'Magasinier',
+const ANIMAL_COLORS = {
+  lion:     { body: '#d4902a', mane: '#a06010' },
+  elephant: { body: '#808888', ear: '#707078' },
+  giraffe:  { body: '#d4b060', spot: '#a07020' },
+  penguin:  { body: '#202020', belly: '#f0f0f0' },
+  monkey:   { body: '#8a5020', face: '#c07848' },
+  bird:     { body: '#40b860', wing: '#f0d020' },
+  zebra:    { body: '#e8e8e0', stripe: '#202020' },
 };
+
+const GRASS_COLORS = ['#5a8a3c', '#528234', '#4e7a30', '#547e36', '#508038'];
+
+const VISITOR_COLORS = [
+  '#e05050', '#50a0e0', '#50c080', '#e0a030',
+  '#a050d0', '#e06090', '#40c0c0', '#c0a040',
+];
