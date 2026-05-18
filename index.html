@@ -2,39 +2,62 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Village — Jeu de gestion médiéval</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Village Médiéval</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="app">
   <canvas id="gameCanvas"></canvas>
 
+  <!-- ═══ DESKTOP: panneau latéral ═══ -->
   <div id="ui">
     <div id="resources">
       <span id="res-wood">🪵 60</span>
       <span id="res-food">🌾 50</span>
       <span id="res-gold">💰 25</span>
-      <span id="res-pop">👥 4 +2👶</span>
+      <span id="res-pop">👥 4</span>
       <span id="res-time">An 1 · Printemps</span>
     </div>
-
     <button id="speed-btn">▶ x1</button>
-
     <div id="build-panel">
       <h3>🔨 Construire</h3>
       <div id="build-buttons"></div>
     </div>
-
     <div id="info-panel">
-      <p id="info-text">Sélectionnez un bâtiment, puis cliquez sur la carte pour le placer.</p>
+      <p id="info-text">Sélectionnez un bâtiment, puis cliquez sur la carte.</p>
     </div>
-
     <div id="log-panel">
       <h4>Événements</h4>
       <ul id="event-log"></ul>
     </div>
   </div>
+
+  <!-- ═══ MOBILE: HUD en overlay ═══ -->
+  <div id="m-hud">
+    <div id="m-res">
+      <span id="m-wood">🪵 60</span>
+      <span id="m-food">🌾 50</span>
+      <span id="m-gold">💰 25</span>
+      <span id="m-pop">👥 4</span>
+    </div>
+    <div id="m-right">
+      <span id="m-time">An 1</span>
+      <button id="m-speed">▶</button>
+    </div>
+  </div>
+
+  <!-- ═══ MOBILE: barre de construction en bas ═══ -->
+  <div id="m-bar">
+    <div id="m-scroll"><!-- boutons générés par JS --></div>
+    <button id="m-cancel" class="hidden">✕</button>
+  </div>
+
+  <!-- ═══ Toast (mobile feedback) ═══ -->
+  <div id="m-toast"></div>
 </div>
 
 <script src="js/constants.js"></script>

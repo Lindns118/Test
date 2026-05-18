@@ -24,8 +24,12 @@ class Game {
   }
 
   _resize() {
-    this.canvas.width = Math.max(400, window.innerWidth - 280);
+    const mobile = window.innerWidth <= 640;
+    this.canvas.width  = mobile ? window.innerWidth : Math.max(400, window.innerWidth - 280);
     this.canvas.height = window.innerHeight;
+    // On mobile, position canvas to fill whole screen
+    this.canvas.style.width  = this.canvas.width + 'px';
+    this.canvas.style.height = this.canvas.height + 'px';
   }
 
   _init() {
@@ -137,13 +141,13 @@ class Game {
 
   tryPlaceBuilding(type, x, y) {
     if (!this.canPlaceBuilding(type, x, y)) {
-      this.ui.showInfo('❌ Impossible de construire ici !');
+      this.ui.showInfo('❌ Impossible de construire ici !', true);
       return false;
     }
     const def = BDEF[type];
     for (const [r, v] of Object.entries(def.cost)) {
       if ((this.resources[r] || 0) < v) {
-        this.ui.showInfo(`❌ Ressources insuffisantes pour ${def.name}`);
+        this.ui.showInfo(`❌ Ressources insuffisantes pour ${def.name}`, true);
         return false;
       }
     }
