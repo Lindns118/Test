@@ -8,25 +8,23 @@ class UI {
     this.hy = -1;
 
     // Desktop elements
-    this._elWood  = document.getElementById('res-wood');
-    this._elFood  = document.getElementById('res-food');
-    this._elGold  = document.getElementById('res-gold');
-    this._elPop   = document.getElementById('res-pop');
-    this._elTime  = document.getElementById('res-time');
-    this._elInfo  = document.getElementById('info-text');
-    this._elLog   = document.getElementById('event-log');
-    this._elSpeed = document.getElementById('speed-btn');
+    this._elMoney    = document.getElementById('res-money');
+    this._elVisitors = document.getElementById('res-visitors');
+    this._elRep      = document.getElementById('res-rep');
+    this._elTime     = document.getElementById('res-time');
+    this._elInfo     = document.getElementById('info-text');
+    this._elLog      = document.getElementById('event-log');
+    this._elSpeed    = document.getElementById('speed-btn');
 
     // Mobile elements
-    this._mWood   = document.getElementById('m-wood');
-    this._mFood   = document.getElementById('m-food');
-    this._mGold   = document.getElementById('m-gold');
-    this._mPop    = document.getElementById('m-pop');
-    this._mTime   = document.getElementById('m-time');
-    this._mSpeed  = document.getElementById('m-speed');
-    this._mCancel = document.getElementById('m-cancel');
-    this._mToast  = document.getElementById('m-toast');
-    this._mScroll = document.getElementById('m-scroll');
+    this._mMoney    = document.getElementById('m-money');
+    this._mVisitors = document.getElementById('m-visitors');
+    this._mRep      = document.getElementById('m-rep');
+    this._mTime     = document.getElementById('m-time');
+    this._mSpeed    = document.getElementById('m-speed');
+    this._mCancel   = document.getElementById('m-cancel');
+    this._mToast    = document.getElementById('m-toast');
+    this._mScroll   = document.getElementById('m-scroll');
     this._toastTimer = null;
 
     this._buildDesktopButtons();
@@ -47,8 +45,8 @@ class UI {
       btn.className = 'build-btn';
       btn.dataset.type = type;
       btn.dataset.set = 'desktop';
-      btn.style.borderLeft = `4px solid ${def.color}`;
-      btn.title = def.description;
+      if (def.color) btn.style.borderLeft = `4px solid ${def.color}`;
+      btn.title = def.description || '';
       btn.innerHTML = `<span class="btn-name">${def.icon} ${def.name}</span><span class="btn-cost">${costStr}</span>`;
       btn.addEventListener('click', () => this._toggle(type));
       container.appendChild(btn);
@@ -62,16 +60,16 @@ class UI {
       btn.dataset.type = type;
       btn.dataset.set = 'mobile';
       btn.innerHTML = `<span class="m-icon">${def.icon}</span><span class="m-name">${def.name}</span>`;
-      btn.style.borderColor = def.color + '88';
+      if (def.color) btn.style.borderColor = def.color + '88';
       btn.addEventListener('click', () => this._toggle(type));
       this._mScroll.appendChild(btn);
     }
   }
 
   _costStr(def) {
+    if (!def.cost) return 'gratuit';
     return Object.entries(def.cost).map(([r, v]) => {
-      const icon = r === 'wood' ? '🪵' : r === 'food' ? '🌾' : '💰';
-      return `${v}${icon}`;
+      return `${v}💵`;
     }).join(' ');
   }
 
@@ -93,7 +91,7 @@ class UI {
       b.classList.toggle('active', b.dataset.type === type);
     });
 
-    const msg = `${def.icon} ${def.name} — ${def.description}`;
+    const msg = `${def.icon} ${def.name} — ${def.description || ''}`;
     this._elInfo.textContent = msg;
     this._showToast(msg);
 
@@ -114,6 +112,7 @@ class UI {
   _setupCanvas() {
     const canvas = this.game.canvas;
     let dragging = false;
+    let _isPainting = false;
     let dragStart = { x: 0, y: 0 };
     let camStart  = { x: 0, y: 0 };
     let moved = false;
@@ -121,32 +120,48 @@ class UI {
     canvas.addEventListener('mousedown', (e) => {
       dragging = true;
       moved = false;
+      _isPainting = false;
       dragStart = { x: e.clientX, y: e.clientY };
       camStart  = { x: this.game.camera.x, y: this.game.camera.y };
+
+      // Immediately start painting if path is selected
+      if (this.selectedBuildType === 'path') {
+        _isPainting = true;
+        this.game.tryPlaceBuilding('path', this.hx, this.hy);
+      }
     });
 
     canvas.addEventListener('mousemove', (e) => {
       this._updateHoverMouse(e);
+
       if (!dragging) return;
+
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
       if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
-      if (moved && !this.selectedBuildType) {
+
+      if (this.selectedBuildType === 'path' && _isPainting) {
+        // Drag-paint paths
+        this.game.tryPlaceBuilding('path', this.hx, this.hy);
+      } else if (moved && !this.selectedBuildType) {
+        // Pan camera
         this.game.camera.x = camStart.x - dx;
         this.game.camera.y = camStart.y - dy;
         this._clampCamera();
       }
     });
 
-    canvas.addEventListener('mouseup', () => {
-      if (!moved && this.selectedBuildType) {
+    canvas.addEventListener('mouseup', (e) => {
+      if (!moved && this.selectedBuildType && this.selectedBuildType !== 'path') {
         this.game.tryPlaceBuilding(this.selectedBuildType, this.hx, this.hy);
       }
       dragging = false;
+      _isPainting = false;
     });
 
     canvas.addEventListener('mouseleave', () => {
       dragging = false;
+      _isPainting = false;
       this.hx = -1;
       this.hy = -1;
     });
@@ -176,6 +191,7 @@ class UI {
     let touchMoved = false;
     let touchStart = { x: 0, y: 0 };
     let camStartT  = { x: 0, y: 0 };
+    let _isTouchPainting = false;
 
     const touchDist = (t) => {
       const pts = Object.values(t);
@@ -203,9 +219,18 @@ class UI {
         touchStart = { x: first.x, y: first.y };
         camStartT  = { x: this.game.camera.x, y: this.game.camera.y };
         touchMoved = false;
+        _isTouchPainting = false;
+
+        // Start painting if path selected
+        if (this.selectedBuildType === 'path') {
+          _isTouchPainting = true;
+          this._updateHoverPx(first.x, first.y);
+          this.game.tryPlaceBuilding('path', this.hx, this.hy);
+        }
       }
       if (Object.keys(touches).length === 2) {
         pinchDist0 = touchDist(touches);
+        _isTouchPainting = false;
       }
     }, { passive: false });
 
@@ -229,17 +254,20 @@ class UI {
         pinchDist0 = newDist;
         touchMoved = true;
       } else if (count === 1) {
-        // Pan
         const cur = Object.values(touches)[0];
         const dx = cur.x - touchStart.x;
         const dy = cur.y - touchStart.y;
         if (Math.abs(dx) + Math.abs(dy) > 6) touchMoved = true;
-        if (touchMoved) {
+
+        if (this.selectedBuildType === 'path' && _isTouchPainting) {
+          // Touch-drag paint
+          this._updateHoverPx(cur.x, cur.y);
+          this.game.tryPlaceBuilding('path', this.hx, this.hy);
+        } else if (touchMoved && !this.selectedBuildType) {
           this.game.camera.x = camStartT.x - dx;
           this.game.camera.y = camStartT.y - dy;
           this._clampCamera();
         }
-        // Update hover for ghost preview
         this._updateHoverPx(cur.x, cur.y);
       }
     }, { passive: false });
@@ -252,22 +280,25 @@ class UI {
 
       if (Object.keys(touches).length < 2) pinchDist0 = 0;
 
-      // Tap = place building
-      if (!touchMoved && this.selectedBuildType && e.changedTouches.length > 0) {
+      // Tap = place building (non-path)
+      if (!touchMoved && this.selectedBuildType && this.selectedBuildType !== 'path' && e.changedTouches.length > 0) {
         const t = e.changedTouches[0];
         this._updateHoverPx(t.clientX, t.clientY);
         this.game.tryPlaceBuilding(this.selectedBuildType, this.hx, this.hy);
       }
 
-      if (Object.keys(touches).length === 0) touchMoved = false;
+      if (Object.keys(touches).length === 0) {
+        touchMoved = false;
+        _isTouchPainting = false;
+      }
     }, { passive: false });
   }
 
   _setupSpeedBtns() {
+    const labels  = ['▶ x1', '▶▶ x2', '▶▶▶ x4'];
+    const mLabels = ['▶', '▶▶', '▶▶▶'];
     const cycle = () => {
       this.game.speedIndex = (this.game.speedIndex + 1) % this.game.SPEEDS.length;
-      const labels = ['▶ x1', '▶▶ x3', '▶▶▶ x6'];
-      const mLabels = ['▶', '▶▶', '▶▶▶'];
       this._elSpeed.textContent = labels[this.game.speedIndex];
       this._mSpeed.textContent  = mLabels[this.game.speedIndex];
     };
@@ -328,36 +359,37 @@ class UI {
   // ─── Periodic update ─────────────────────────────────────
 
   update() {
-    const res = this.game.resources;
-    const pop = this.game.inhabitants.filter(i => i.alive);
-    const adults   = pop.filter(i => i.isAdult).length;
-    const children = pop.length - adults;
-    const popStr   = `👥 ${adults}${children > 0 ? `+${children}` : ''}`;
+    const game = this.game;
+    const money = game.resources.money;
+    const visitorsCount = game.visitors.length;
+    const rep = Math.round(game.reputation);
 
-    const t      = this.game.time;
-    const season = SEASONS[Math.floor(t / TICKS_PER_SEASON) % 4];
-    const year   = Math.floor(t / TICKS_PER_YEAR) + 1;
-    const timeStr = `An ${year} · ${season}`;
+    // Time
+    const totalDays = Math.floor(game.time / TICKS_PER_DAY);
+    const monthIdx = totalDays % 12;
+    const year = Math.floor(totalDays / 12) + 1;
+    const monthName = MONTHS[monthIdx];
+
+    // Format money with spaces as thousands separator
+    const moneyFmt = Math.floor(money).toLocaleString('fr-FR');
 
     // Desktop
-    this._elWood.textContent = `🪵 ${Math.floor(res.wood)}`;
-    this._elFood.textContent = `🌾 ${Math.floor(res.food)}`;
-    this._elGold.textContent = `💰 ${Math.floor(res.gold)}`;
-    this._elPop.textContent  = popStr;
-    this._elTime.textContent = timeStr;
+    this._elMoney.textContent    = `💵 ${moneyFmt}`;
+    this._elVisitors.textContent = `👥 ${visitorsCount} visiteur${visitorsCount !== 1 ? 's' : ''}`;
+    this._elRep.textContent      = `⭐ ${rep}%`;
+    this._elTime.textContent     = `📅 ${monthName} An ${year}`;
 
-    // Mobile
-    this._mWood.textContent = `🪵 ${Math.floor(res.wood)}`;
-    this._mFood.textContent = `🌾 ${Math.floor(res.food)}`;
-    this._mGold.textContent = `💰 ${Math.floor(res.gold)}`;
-    this._mPop.textContent  = popStr;
-    this._mTime.textContent = `An ${year}`;
+    // Mobile compact
+    this._mMoney.textContent    = `💵${Math.floor(money)}`;
+    this._mVisitors.textContent = `👥${visitorsCount}`;
+    this._mRep.textContent      = `⭐${rep}`;
+    this._mTime.textContent     = `${monthName.slice(0, 3)} An${year}`;
 
     // Afford state (both sets of buttons)
     document.querySelectorAll('[data-type]').forEach(btn => {
       const def = BDEF[btn.dataset.type];
-      if (!def) return;
-      const ok = Object.entries(def.cost).every(([r, v]) => (res[r] || 0) >= v);
+      if (!def || !def.cost) return;
+      const ok = Object.entries(def.cost).every(([r, v]) => (game.resources[r] || 0) >= v);
       btn.classList.toggle('cannot-afford', !ok);
     });
   }

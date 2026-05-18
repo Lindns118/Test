@@ -3,14 +3,20 @@ class Game {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
 
-    this.SPEEDS = [1, 3, 6];
+    // Speeds: [1, 2, 4] ticks per frame
+    this.SPEEDS = [1, 2, 4];
     this.speedIndex = 0;
 
     this.map = new GameMap(MAP_W, MAP_H);
     this.buildings = [];
-    this.inhabitants = [];
-    this.resources = { wood: 60, food: 50, gold: 25 };
+    this.animals = [];    // flat list of all animals
+    this.visitors = [];   // active visitors
+
+    this.resources = { money: 3000 };
+    this.reputation = 40; // 0-100
     this.time = 0;
+    this.dayTimer = 0;
+
     this.camera = { x: 0, y: 0, zoom: 1 };
 
     window.addEventListener('resize', () => this._resize());
@@ -27,53 +33,39 @@ class Game {
     const mobile = window.innerWidth <= 640;
     this.canvas.width  = mobile ? window.innerWidth : Math.max(400, window.innerWidth - 280);
     this.canvas.height = window.innerHeight;
-    // On mobile, position canvas to fill whole screen
     this.canvas.style.width  = this.canvas.width + 'px';
     this.canvas.style.height = this.canvas.height + 'px';
   }
 
   _init() {
     const cx = Math.floor(MAP_W / 2);
-    const cy = Math.floor(MAP_H / 2);
 
-    // Center camera
+    // Center camera on entrance area (top-center)
     this.camera.x = (cx * TILE_SIZE) * this.camera.zoom - this.canvas.width / 2;
-    this.camera.y = (cy * TILE_SIZE) * this.camera.zoom - this.canvas.height / 2;
+    this.camera.y = 0;
 
-    // Clear starting area
-    this.map.clearArea(cx - 7, cy - 5, 14, 12);
+    // Place entrance at top center, free of charge
+    const ex = cx - 2; // w=4, so center at cx
+    const ey = 5;
+    this._placeBuilding('entrance', ex, ey, true);
 
-    // Starting buildings (free)
-    this._placeBuilding('house',     cx - 5, cy - 2, true);
-    this._placeBuilding('house',     cx - 2, cy - 2, true);
-    this._placeBuilding('warehouse', cx + 2, cy - 2, true);
-
-    // Starting population: 4 adults (2 couples) + 2 children
-    const startPeople = [
-      { gender: GENDER.M, age: 22 },
-      { gender: GENDER.F, age: 20 },
-      { gender: GENDER.M, age: 28 },
-      { gender: GENDER.F, age: 26 },
-      { gender: GENDER.M, age: 8  },
-      { gender: GENDER.F, age: 10 },
-    ];
-
-    for (let i = 0; i < startPeople.length; i++) {
-      const p = startPeople[i];
-      const tx = cx - 2 + (i % 3);
-      const ty = cy + 1 + Math.floor(i / 3);
-      const inh = new Inhabitant(tx, ty, p.gender, p.age);
-      this.inhabitants.push(inh);
+    // Place 6 PATH tiles below the entrance to guide visitors
+    for (let i = 0; i < 6; i++) {
+      const px = cx - 2 + Math.floor(BDEF.entrance.w / 2); // center column of entrance
+      const py = ey + BDEF.entrance.h + i;
+      if (this.map.inBounds(px, py)) {
+        this.map.setTile(px, py, TILE.PATH);
+      }
     }
 
-    // Pre-couple the adults
-    this.inhabitants[0].partner = this.inhabitants[1];
-    this.inhabitants[1].partner = this.inhabitants[0];
-    this.inhabitants[2].partner = this.inhabitants[3];
-    this.inhabitants[3].partner = this.inhabitants[2];
-
-    this._assignHomes();
-    this._assignJobs();
+    // Also place paths 1 tile to left and right to widen entrance path
+    for (let i = 0; i < 4; i++) {
+      const py = ey + BDEF.entrance.h + i;
+      const pxL = cx - 2 + Math.floor(BDEF.entrance.w / 2) - 1;
+      const pxR = cx - 2 + Math.floor(BDEF.entrance.w / 2) + 1;
+      if (this.map.inBounds(pxL, py)) this.map.setTile(pxL, py, TILE.PATH);
+      if (this.map.inBounds(pxR, py)) this.map.setTile(pxR, py, TILE.PATH);
+    }
   }
 
   _loop() {
@@ -88,54 +80,112 @@ class Game {
 
   _update() {
     this.time++;
+    this.dayTimer++;
 
-    this.map.update();
+    if (this.dayTimer >= TICKS_PER_DAY) {
+      this.dayTimer = 0;
+      this._processDailyFinances();
+      this._spawnVisitors();
+    }
 
+    // Update buildings
     for (const b of this.buildings) b.update(this);
 
-    for (const inh of this.inhabitants) {
-      if (inh.alive) inh.update(this);
+    // Update animals
+    for (const a of this.animals) a.update();
+
+    // Update visitors
+    for (const v of this.visitors) {
+      if (v.alive) v.update(this);
     }
 
-    // Remove dead
-    const before = this.inhabitants.length;
-    this.inhabitants = this.inhabitants.filter(i => i.alive);
-
-    // Reassign on death
-    if (this.inhabitants.length < before) {
-      this._assignJobs();
-      this._assignHomes();
-    }
-
-    // Periodic job/home assignment
-    if (this.time % 90 === 0) {
-      this._assignJobs();
-      this._assignHomes();
-    }
-
-    // Food demand is handled per-inhabitant in Inhabitant.update()
+    // Remove departed visitors
+    this.visitors = this.visitors.filter(v => v.alive);
   }
 
-  // ─── Restart ─────────────────────────────────────────────────────
+  // ─── Daily Finances ───────────────────────────────────────────────
 
-  restart() {
-    if (!confirm('Recommencer depuis le début ?')) return;
+  _processDailyFinances() {
+    let income = 0;
+    let expenses = 0;
 
-    this.map = new GameMap(MAP_W, MAP_H);
-    this.buildings = [];
-    this.inhabitants = [];
-    this.resources = { wood: 60, food: 50, gold: 25 };
-    this.time = 0;
+    const visitorsCount = this.visitors.length;
 
-    // Reset camera to default
-    this.camera = { x: 0, y: 0, zoom: 1 };
+    // Revenue from shops and restaurants
+    for (const b of this.buildings) {
+      if (b.def.revenue_visitor) {
+        const shopRevenue = visitorsCount * b.def.revenue_visitor;
+        income += shopRevenue;
+      }
+    }
 
-    // Clear UI state
-    this.ui._deselect();
-    this.ui._elLog.innerHTML = '';
-    this.ui._showToast('Nouvelle partie !');
+    // Wages for keeper cabins
+    for (const b of this.buildings) {
+      if (b.def.wage_day) {
+        expenses += b.def.wage_day;
+      }
+    }
 
-    this._init();
+    // Food costs for enclosures
+    for (const b of this.buildings) {
+      if (b.def.food_day) {
+        expenses += b.def.food_day;
+      }
+    }
+
+    const net = income - expenses;
+    this.resources.money += net;
+
+    // Log daily summary
+    const totalDays = Math.floor(this.time / TICKS_PER_DAY);
+    const monthIdx = totalDays % 12;
+    const monthName = MONTHS[monthIdx];
+
+    if (income > 0 || expenses > 0) {
+      this.notify(`📊 ${monthName}: +${income}💵 recettes, -${expenses}💵 coûts (bilan: ${net >= 0 ? '+' : ''}${net}💵)`);
+    }
+  }
+
+  // ─── Visitor Spawning ─────────────────────────────────────────────
+
+  _spawnVisitors() {
+    const entrance = this.buildings.find(b => b.type === 'entrance');
+    if (!entrance) return;
+
+    // Only spawn if there are enclosures to visit
+    const enclosures = this.buildings.filter(b => b.def.isEnclosure);
+    if (enclosures.length === 0) return;
+
+    const maxVisitors = Math.floor(this.reputation / 5) + 3;
+    if (this.visitors.length >= maxVisitors) return;
+
+    const slots = maxVisitors - this.visitors.length;
+    const n = Math.min(slots, 1 + Math.floor(Math.random() * 3));
+
+    for (let i = 0; i < n; i++) {
+      const v = new Visitor(entrance, this);
+      this.visitors.push(v);
+    }
+
+    if (n > 0) {
+      this.notify(`🎪 ${n} nouveau${n > 1 ? 'x' : ''} visiteur${n > 1 ? 's' : ''} entré${n > 1 ? 's' : ''} !`);
+    }
+  }
+
+  // ─── Visitor Leave ────────────────────────────────────────────────
+
+  onVisitorLeave(visitor) {
+    // Ticket revenue
+    const entrance = this.buildings.find(b => b.type === 'entrance');
+    const ticket = entrance ? (entrance.def.ticket || 15) : 15;
+    this.resources.money += ticket;
+
+    // Reputation impact based on happiness
+    if (visitor.happiness > 65) {
+      this.reputation = Math.min(100, this.reputation + 1);
+    } else if (visitor.happiness < 35) {
+      this.reputation = Math.max(0, this.reputation - 1);
+    }
   }
 
   // ─── Building Placement ──────────────────────────────────────────
@@ -145,13 +195,21 @@ class Game {
     if (!def) return false;
     if (x < 0 || y < 0 || x + def.w > MAP_W || y + def.h > MAP_H) return false;
 
+    // Path: only on GRASS
+    if (def.isPath) {
+      const tile = this.map.getTile(x, y);
+      return tile === TILE.GRASS;
+    }
+
+    // Buildings: no water allowed
     for (let dy = 0; dy < def.h; dy++) {
       for (let dx = 0; dx < def.w; dx++) {
         const tile = this.map.getTile(x + dx, y + dy);
-        if (tile === TILE.WATER || tile === TILE.ROCK) return false;
+        if (tile === TILE.WATER) return false;
       }
     }
 
+    // No overlap with existing buildings
     for (const b of this.buildings) {
       if (x < b.x + b.w && x + def.w > b.x &&
           y < b.y + b.h && y + def.h > b.y) {
@@ -162,104 +220,84 @@ class Game {
   }
 
   tryPlaceBuilding(type, x, y) {
-    if (!this.canPlaceBuilding(type, x, y)) {
-      this.ui.showInfo('❌ Impossible de construire ici !', true);
+    // Entrance: only one allowed
+    if (type === 'entrance' && this.buildings.find(b => b.type === 'entrance')) {
+      this.ui.showInfo('❌ L\'entrée est déjà placée !', true);
       return false;
     }
+
+    if (!this.canPlaceBuilding(type, x, y)) {
+      // Silently fail for path painting (avoids spam)
+      if (type !== 'path') {
+        this.ui.showInfo('❌ Impossible de construire ici !', true);
+      }
+      return false;
+    }
+
     const def = BDEF[type];
+
+    // Check resources
     for (const [r, v] of Object.entries(def.cost)) {
       if ((this.resources[r] || 0) < v) {
         this.ui.showInfo(`❌ Ressources insuffisantes pour ${def.name}`, true);
         return false;
       }
     }
-    for (const [r, v] of Object.entries(def.cost)) this.resources[r] -= v;
 
+    // Deduct cost
+    for (const [r, v] of Object.entries(def.cost)) {
+      this.resources[r] -= v;
+    }
+
+    if (def.isPath) {
+      // PATH: just set the tile, no Building object created
+      this.map.setTile(x, y, TILE.PATH);
+      return true;
+    }
+
+    // Normal building
     const b = this._placeBuilding(type, x, y, false);
     this.ui.showInfo(`✅ ${def.name} construite !`);
-    this._assignJobs();
-    this._assignHomes();
     return b;
   }
 
   _placeBuilding(type, x, y, free) {
-    if (!free) {
-      // costs already deducted by tryPlaceBuilding
-    }
     const b = new Building(type, x, y);
     this.buildings.push(b);
-    this.map.clearArea(x, y, b.w, b.h);
+    // Clear underlying tiles (except water) for the building footprint
+    this.map.clearForBuilding(x, y, b.w, b.h);
+
+    if (b.def.isEnclosure) {
+      b.spawnAnimals(this);
+    }
+
     return b;
   }
 
-  // ─── Population ──────────────────────────────────────────────────
+  // ─── Restart ─────────────────────────────────────────────────────
 
-  birthChild(mother) {
-    const home = mother.home;
-    if (!home || home.residents.length >= (home.def.capacity || 4)) return;
+  restart() {
+    if (!confirm('Recommencer depuis le début ?')) return;
 
-    const gender = Math.random() < 0.5 ? GENDER.M : GENDER.F;
-    const tx = home.x + Math.floor(home.w / 2);
-    const ty = home.y + home.h;
-    const child = new Inhabitant(tx, ty, gender, 0);
-    this.inhabitants.push(child);
-    this._assignHomes();
-    this.notify(`👶 Naissance ! La population grandit.`);
-  }
+    _buildingId = 0;
+    _visitorId  = 0;
 
-  findMate(inh) {
-    const targetGender = inh.isMale ? GENDER.F : GENDER.M;
-    let best = null;
-    let bestDist = Infinity;
+    this.map = new GameMap(MAP_W, MAP_H);
+    this.buildings = [];
+    this.animals = [];
+    this.visitors = [];
+    this.resources = { money: 3000 };
+    this.reputation = 40;
+    this.time = 0;
+    this.dayTimer = 0;
 
-    for (const c of this.inhabitants) {
-      if (c === inh || !c.alive || c.gender !== targetGender) continue;
-      if (c.partner || !c.isAdult || c.isSenior) continue;
-      const dx = c.x - inh.x, dy = c.y - inh.y;
-      const d = dx * dx + dy * dy;
-      if (d < bestDist) { bestDist = d; best = c; }
-    }
-    return best;
-  }
+    this.camera = { x: 0, y: 0, zoom: 1 };
 
-  // ─── Job & Home Assignment ───────────────────────────────────────
+    this.ui._deselect();
+    this.ui._elLog.innerHTML = '';
+    this.ui._showToast('Nouvelle partie !');
 
-  _assignJobs() {
-    for (const b of this.buildings) {
-      if (b.def.workers_needed === 0) continue;
-      // Clean dead workers
-      b.workers = b.workers.filter(w => w.alive);
-      b.workers.forEach(w => { if (w.workplace !== b) { w.workplace = b; w.job = b.def.job; } });
-    }
-
-    const unemployed = this.inhabitants.filter(
-      i => i.alive && i.isAdult && !i.workplace
-    );
-
-    for (const b of this.buildings) {
-      if (b.def.workers_needed === 0) continue;
-      for (const inh of unemployed) {
-        if (inh.workplace) continue;
-        if (b.needsWorkers) b.addWorker(inh);
-      }
-    }
-  }
-
-  _assignHomes() {
-    for (const b of this.buildings) {
-      if (!b.isHouse) continue;
-      b.residents = b.residents.filter(r => r.alive);
-      b.residents.forEach(r => { if (r.home !== b) r.home = b; });
-    }
-
-    const homeless = this.inhabitants.filter(i => i.alive && !i.home);
-    for (const b of this.buildings) {
-      if (!b.isHouse) continue;
-      for (const inh of homeless) {
-        if (inh.home) continue;
-        b.addResident(inh);
-      }
-    }
+    this._init();
   }
 
   // ─── Notifications ───────────────────────────────────────────────

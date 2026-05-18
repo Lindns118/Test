@@ -1,202 +1,167 @@
-let _inhId = 0;
+let _visitorId = 0;
 
-const INH_COLORS_M = ['#4a7abf', '#3a6aaf', '#5a8acf', '#2a5a9f', '#6a9adf'];
-const INH_COLORS_F = ['#cf6a9a', '#bf5a8a', '#df7aaa', '#af4a7a', '#ef8aba'];
-
-class Inhabitant {
-  constructor(tx, ty, gender, age) {
-    this.id = _inhId++;
-    this.x = tx * TILE_SIZE + TILE_SIZE / 2;
-    this.y = ty * TILE_SIZE + TILE_SIZE / 2;
-    this.gender = gender;
-    this.age = (age !== undefined ? age : AGE_ADULT + 5 + Math.random() * 20) * TICKS_PER_YEAR;
+class Visitor {
+  constructor(entrance, game) {
+    this.id = _visitorId++;
     this.alive = true;
 
-    this.home = null;
-    this.workplace = null;
-    this.job = null;
-    this.partner = null;
+    // Spawn position: at the entrance tile
+    const et = entrance.entranceTile;
+    this.x = et.x * TILE_SIZE + TILE_SIZE / 2;
+    this.y = et.y * TILE_SIZE + TILE_SIZE / 2;
 
-    this.state = 'idle';
-    this.stateTimer = Math.floor(Math.random() * 120);
+    this.happiness = 40;
+    this.energy = 100;
+    this.money = 30 + Math.floor(Math.random() * 41); // 30-70
+
+    // Build wishlist: 2-4 random enclosures from those that exist
+    const enclosures = game.buildings.filter(b => b.def.isEnclosure);
+    const shuffled = enclosures.slice().sort(() => Math.random() - 0.5);
+    const wishCount = 2 + Math.floor(Math.random() * 3); // 2-4
+    this.wishList = shuffled.slice(0, wishCount).map(b => b.id);
+    this.visited = new Set();
+
+    this.state = 'idle'; // 'idle' | 'going' | 'watching' | 'leaving'
+    this.stateTimer = 0;
+    this.decideTimer = Math.floor(Math.random() * 60); // stagger decisions
 
     this.path = [];
     this.targetX = this.x;
     this.targetY = this.y;
-    this.speed = 0.9 + Math.random() * 0.5;
+    this.speed = 1.1 + Math.random() * 0.6;
 
-    this.hunger = 80 + Math.random() * 20;
-    this.health = 90 + Math.random() * 10;
+    this.color = VISITOR_COLORS[this.id % VISITOR_COLORS.length];
 
-    this.birthTimer = Math.floor(Math.random() * 400);
-    this.color = gender === GENDER.M
-      ? INH_COLORS_M[this.id % INH_COLORS_M.length]
-      : INH_COLORS_F[this.id % INH_COLORS_F.length];
+    this.currentTarget = null; // building id being visited
+    this.watchTimer = 0;
+    this.watchDuration = 0;
+
+    // Revenue ticket flag (only paid once at entrance)
+    this._ticketPaid = false;
   }
 
-  get isAdult() { return this.age >= AGE_ADULT * TICKS_PER_YEAR; }
-  get isSenior() { return this.age >= AGE_SENIOR * TICKS_PER_YEAR; }
-  get isMale() { return this.gender === GENDER.M; }
-  get isFemale() { return this.gender === GENDER.F; }
   get tileX() { return Math.floor(this.x / TILE_SIZE); }
   get tileY() { return Math.floor(this.y / TILE_SIZE); }
-  get displayAge() { return Math.floor(this.age / TICKS_PER_YEAR); }
 
   update(game) {
     if (!this.alive) return;
 
-    // Aging
-    this.age++;
-    const maxAge = (AGE_MAX + Math.floor(this.id % 10)) * TICKS_PER_YEAR;
-    if (this.age >= maxAge) {
-      this._die(game, 'vieillesse');
-      return;
-    }
+    // Energy drains slowly
+    this.energy -= 0.015;
 
-    // Hunger every 18 ticks (staggered by id)
-    if (game.time % 18 === this.id % 18) {
-      this.hunger -= 0.18;
-      if (this.hunger <= 0) {
-        this.health -= 1;
-        if (this.health <= 0) {
-          this._die(game, 'famine');
-          return;
-        }
-      } else if (this.hunger < 30 && game.resources.food > 0) {
-        this._eat(game);
-      }
-      if (this.hunger > 55 && this.health < 100) {
-        this.health = Math.min(100, this.health + 0.25);
-      }
-    }
-
-    // Birth tick (females in couple, adult, not senior)
-    if (this.isFemale && this.partner && this.isAdult && !this.isSenior) {
-      this.birthTimer++;
-      if (this.birthTimer >= 350 + Math.floor(Math.random() * 250)) {
-        this.birthTimer = 0;
-        if (game.resources.food >= 10 && this.home) {
-          game.birthChild(this);
-        }
-      }
-    }
-
-    this._move();
-    this._updateState(game);
-  }
-
-  _eat(game) {
-    const amount = Math.min(18, game.resources.food, 100 - this.hunger);
-    if (amount <= 0) return;
-    game.resources.food -= amount;
-    this.hunger += amount;
-  }
-
-  _die(game, reason) {
-    this.alive = false;
-    if (this.partner) this.partner.partner = null;
-    if (this.home) this.home.removeResident(this);
-    if (this.workplace) this.workplace.removeWorker(this);
-    game.notify(`${this.isMale ? 'Un homme' : 'Une femme'} est mort(e) de ${reason}.`);
-  }
-
-  _updateState(game) {
     this.stateTimer++;
+    this.decideTimer++;
 
     switch (this.state) {
       case 'idle':
-        if (this.stateTimer >= 80 + Math.floor(this.id % 40)) {
-          this._decideAction(game);
-          this.stateTimer = 0;
-        }
+        this._updateIdle(game);
         break;
+      case 'going':
+        this._updateGoing(game);
+        break;
+      case 'watching':
+        this._updateWatching(game);
+        break;
+      case 'leaving':
+        this._updateLeaving(game);
+        break;
+    }
 
-      case 'going_to_work':
-        if (this._isAtTarget()) {
-          if (this.workplace) this._setState('working');
-          else this._setState('idle');
-        }
-        break;
+    this._move();
+  }
 
-      case 'working':
-        if (this.stateTimer >= 180 + Math.floor(Math.random() * 80)) {
-          this._setState('going_home');
-          if (this.home) this._pathToBuilding(game, this.home);
-        }
-        break;
+  _updateIdle(game) {
+    // Check leave conditions
+    if (this.energy <= 0 || this.wishList.length === 0) {
+      this._startLeaving(game);
+      return;
+    }
 
-      case 'going_home':
-        if (this._isAtTarget()) this._setState('at_home');
-        break;
+    // Decide every ~60 ticks
+    if (this.decideTimer < 60) return;
+    this.decideTimer = 0;
 
-      case 'at_home':
-        if (this.stateTimer >= 120) this._setState('idle');
-        break;
+    // Pick next enclosure to visit
+    const remaining = this.wishList.filter(id => !this.visited.has(id));
+    if (remaining.length === 0) {
+      this._startLeaving(game);
+      return;
+    }
 
-      case 'wandering':
-        if (this._isAtTarget() || this.stateTimer >= 250) this._setState('idle');
-        break;
+    // Find enclosure building by id
+    const targetId = remaining[0];
+    const target = game.buildings.find(b => b.id === targetId);
+    if (!target) {
+      // Building no longer exists, remove from wishlist
+      this.wishList = this.wishList.filter(id => id !== targetId);
+      return;
+    }
+
+    this.currentTarget = target;
+    this._pathToBuilding(game, target);
+    this.state = 'going';
+    this.stateTimer = 0;
+  }
+
+  _updateGoing(game) {
+    if (this.energy <= 0) {
+      this._startLeaving(game);
+      return;
+    }
+
+    if (this._isAtTarget()) {
+      // Arrived at enclosure
+      if (this.currentTarget) {
+        this.visited.add(this.currentTarget.id);
+        this.wishList = this.wishList.filter(id => id !== this.currentTarget.id);
+      }
+      this.state = 'watching';
+      this.stateTimer = 0;
+      this.watchTimer = 0;
+      this.watchDuration = 150 + Math.floor(Math.random() * 101); // 150-250
     }
   }
 
-  _decideAction(game) {
-    // Hungry? Eat now
-    if (this.hunger < 45 && game.resources.food > 0) {
-      this._eat(game);
+  _updateWatching(game) {
+    this.watchTimer++;
+
+    // Happiness boost every 30 ticks while watching
+    if (this.watchTimer % 30 === 0) {
+      this.happiness = Math.min(100, this.happiness + 4);
     }
 
-    // Children just wander
-    if (!this.isAdult) {
-      this._wander(game);
-      return;
+    if (this.watchTimer >= this.watchDuration) {
+      this.state = 'idle';
+      this.stateTimer = 0;
+      this.decideTimer = 60; // decide immediately
     }
-
-    // Try to form a couple
-    if (!this.partner && Math.random() < 0.08) {
-      const mate = game.findMate(this);
-      if (mate) {
-        this.partner = mate;
-        mate.partner = this;
-        game.notify(`Un couple s'est formé ! 💑`);
-      }
-    }
-
-    const isNight = game.time % 200 > 140;
-
-    if (isNight) {
-      if (this.home) {
-        this._setState('going_home');
-        this._pathToBuilding(game, this.home);
-      } else {
-        this._wander(game);
-      }
-      return;
-    }
-
-    // Go to work
-    if (this.workplace) {
-      this._setState('going_to_work');
-      this._pathToBuilding(game, this.workplace);
-      return;
-    }
-
-    this._wander(game);
   }
 
-  _wander(game) {
-    this._setState('wandering');
-    const wx = Math.max(0, Math.min(MAP_W - 1, this.tileX + Math.floor((Math.random() - 0.5) * 10)));
-    const wy = Math.max(0, Math.min(MAP_H - 1, this.tileY + Math.floor((Math.random() - 0.5) * 10)));
-    this._pathTo(game, wx, wy);
+  _updateLeaving(game) {
+    if (this._isAtTarget()) {
+      // Reached entrance — leave
+      game.onVisitorLeave(this);
+      this.alive = false;
+    }
+  }
+
+  _startLeaving(game) {
+    this.state = 'leaving';
+    this.stateTimer = 0;
+    // Find entrance
+    const entrance = game.buildings.find(b => b.type === 'entrance');
+    if (entrance) {
+      this._pathToBuilding(game, entrance);
+    } else {
+      this.alive = false;
+    }
   }
 
   _pathToBuilding(game, building) {
     const e = building.entryTile;
-    this._pathTo(game, e.x, Math.min(e.y, MAP_H - 1));
-  }
-
-  _pathTo(game, tx, ty) {
-    this.path = findPath(game, this.tileX, this.tileY, tx, ty);
+    const tx = Math.max(0, Math.min(MAP_W - 1, e.x));
+    const ty = Math.max(0, Math.min(MAP_H - 1, e.y));
+    this.path = findPathWeighted(game, this.tileX, this.tileY, tx, ty);
     this._advancePath();
   }
 
@@ -226,10 +191,5 @@ class Inhabitant {
     return this.path.length === 0 &&
            Math.abs(this.x - this.targetX) < 2 &&
            Math.abs(this.y - this.targetY) < 2;
-  }
-
-  _setState(s) {
-    this.state = s;
-    this.stateTimer = 0;
   }
 }

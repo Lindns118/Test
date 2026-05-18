@@ -18,7 +18,7 @@ class Renderer {
 
     this._drawMap();
     this._drawBuildings();
-    this._drawInhabitants();
+    this._drawVisitors();
     this._drawGhost();
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -50,18 +50,48 @@ class Renderer {
         const py = y * TILE_SIZE;
         const tile = map.getTile(x, y);
 
+        // Base grass (always drawn first)
         ctx.fillStyle = GRASS_COLORS[map.grassVariant(x, y)];
         ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
 
-        if (tile === TILE.TREE) {
+        if (tile === TILE.PATH) {
+          this._drawPath(px, py, x, y);
+        } else if (tile === TILE.TREE) {
           this._drawTree(px, py);
         } else if (tile === TILE.WATER) {
           this._drawWater(px, py, x, y);
-        } else if (tile === TILE.ROCK) {
-          this._drawRock(px, py);
         }
       }
     }
+  }
+
+  _drawPath(px, py, tx, ty) {
+    const ctx = this.ctx;
+
+    // Beige/stone base
+    ctx.fillStyle = '#c8b890';
+    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
+
+    // Subtle paving lines (grid effect)
+    ctx.strokeStyle = 'rgba(160,140,100,0.5)';
+    ctx.lineWidth = 0.5;
+
+    // Vertical divider
+    ctx.beginPath();
+    ctx.moveTo(px + TILE_SIZE / 2, py);
+    ctx.lineTo(px + TILE_SIZE / 2, py + TILE_SIZE);
+    ctx.stroke();
+
+    // Horizontal divider
+    ctx.beginPath();
+    ctx.moveTo(px, py + TILE_SIZE / 2);
+    ctx.lineTo(px + TILE_SIZE, py + TILE_SIZE / 2);
+    ctx.stroke();
+
+    // Border (slightly darker)
+    ctx.strokeStyle = 'rgba(140,120,80,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
   }
 
   _drawTree(px, py) {
@@ -111,22 +141,6 @@ class Renderer {
     ctx.fillRect(px + 8, py + 22, 12, 2);
   }
 
-  _drawRock(px, py) {
-    const ctx = this.ctx;
-    ctx.fillStyle = '#6a6a6a';
-    ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
-
-    ctx.fillStyle = '#888';
-    ctx.beginPath();
-    ctx.arc(px + TILE_SIZE / 2 - 2, py + TILE_SIZE / 2 - 2, 8, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#aaa';
-    ctx.beginPath();
-    ctx.arc(px + TILE_SIZE / 2 - 4, py + TILE_SIZE / 2 - 4, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   _drawBuildings() {
     const { ctx, game } = this;
 
@@ -136,117 +150,233 @@ class Renderer {
       const bw = b.w * TILE_SIZE;
       const bh = b.h * TILE_SIZE;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.fillRect(px + 4, py + 4, bw, bh);
+      if (b.def.isEnclosure) {
+        this._drawEnclosure(ctx, b, px, py, bw, bh);
+      } else {
+        this._drawNormalBuilding(ctx, b, px, py, bw, bh);
+      }
+    }
+  }
 
-      // Main wall
-      ctx.fillStyle = b.def.color;
-      ctx.fillRect(px, py, bw, bh);
+  _drawEnclosure(ctx, b, px, py, bw, bh) {
+    const def = b.def;
 
-      // Roof
-      ctx.fillStyle = b.def.roofColor;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(px + 3, py + 3, bw, bh);
+
+    // Enclosure ground (colored)
+    ctx.fillStyle = def.color;
+    ctx.fillRect(px, py, bw, bh);
+
+    // Inner ground texture (lighter)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(px + 4, py + 4, bw - 8, bh - 8);
+
+    // Fence: horizontal rails top and bottom
+    ctx.fillStyle = def.fenceColor;
+    ctx.fillRect(px, py, bw, 4);
+    ctx.fillRect(px, py + bh - 4, bw, 4);
+    ctx.fillRect(px, py, 4, bh);
+    ctx.fillRect(px + bw - 4, py, 4, bh);
+
+    // Fence posts every 32px on perimeter
+    ctx.fillStyle = def.fenceColor;
+    const postSize = 6;
+    // Top and bottom rails: posts
+    for (let fx = px; fx <= px + bw; fx += TILE_SIZE) {
+      ctx.fillRect(fx - postSize / 2, py - 1, postSize, 6);
+      ctx.fillRect(fx - postSize / 2, py + bh - 5, postSize, 6);
+    }
+    // Left and right rails: posts
+    for (let fy = py; fy <= py + bh; fy += TILE_SIZE) {
+      ctx.fillRect(px - 1, fy - postSize / 2, 6, postSize);
+      ctx.fillRect(px + bw - 5, fy - postSize / 2, 6, postSize);
+    }
+
+    // Horizontal mid-rail lines
+    ctx.fillStyle = def.fenceColor;
+    ctx.fillRect(px, py + Math.floor(bh * 0.33), bw, 2);
+    ctx.fillRect(px, py + Math.floor(bh * 0.66), bw, 2);
+    ctx.fillRect(px + Math.floor(bw * 0.33), py, 2, bh);
+    ctx.fillRect(px + Math.floor(bw * 0.66), py, 2, bh);
+
+    // Icon + name at center
+    const cx = px + bw / 2;
+    const cy = py + bh / 2;
+
+    ctx.font = `${Math.min(bw, bh) * 0.35}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.icon, cx, cy - 6);
+
+    ctx.font = `bold ${Math.min(10, bw * 0.1 + 6)}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(def.name, cx, cy + bh * 0.22);
+
+    // Draw animals
+    for (const animal of b.animals) {
+      this._drawAnimal(ctx, animal);
+    }
+  }
+
+  _drawAnimal(ctx, animal) {
+    const { x, y, colors, type } = animal;
+    const r = 5;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x + 1, y + r * 0.5 + 1, r * 1.1, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = colors.body;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Type-specific detail
+    if (type === 'lion' && colors.mane) {
+      ctx.fillStyle = colors.mane;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'penguin' && colors.belly) {
+      ctx.fillStyle = colors.belly;
+      ctx.beginPath();
+      ctx.ellipse(x, y + 1, r * 0.45, r * 0.65, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'zebra' && colors.stripe) {
+      // Stripes
+      ctx.strokeStyle = colors.stripe;
+      ctx.lineWidth = 1;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + i * 2 - 1, y - r);
+        ctx.lineTo(x + i * 2 + 1, y + r);
+        ctx.stroke();
+      }
+    } else if (type === 'bird' && colors.wing) {
+      ctx.fillStyle = colors.wing;
+      ctx.beginPath();
+      ctx.arc(x - 2, y - 2, r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'monkey' && colors.face) {
+      ctx.fillStyle = colors.face;
+      ctx.beginPath();
+      ctx.arc(x, y - 1, r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  _drawNormalBuilding(ctx, b, px, py, bw, bh) {
+    const def = b.def;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillRect(px + 4, py + 4, bw, bh);
+
+    // Main wall
+    ctx.fillStyle = def.color || '#888';
+    ctx.fillRect(px, py, bw, bh);
+
+    // Roof
+    if (def.roofColor) {
+      ctx.fillStyle = def.roofColor;
       ctx.fillRect(px, py, bw, Math.round(bh * 0.38));
 
       // Roof ridge line
       ctx.fillStyle = 'rgba(0,0,0,0.15)';
       ctx.fillRect(px + 2, py + Math.round(bh * 0.38) - 2, bw - 4, 2);
+    }
 
-      // Windows
+    // Windows (only for larger buildings)
+    if (bw >= 64 && def.roofColor) {
       ctx.fillStyle = '#c8e4ff';
       const wpy = py + Math.round(bh * 0.48);
-      if (bw >= 64) {
-        ctx.fillRect(px + 5, wpy, 8, 7);
-        ctx.fillRect(px + bw - 13, wpy, 8, 7);
-        // Window cross
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(px + 9, wpy, 1, 7);
-        ctx.fillRect(px + 5, wpy + 3, 8, 1);
-        ctx.fillRect(px + bw - 9, wpy, 1, 7);
-        ctx.fillRect(px + bw - 13, wpy + 3, 8, 1);
-      } else {
-        ctx.fillStyle = '#c8e4ff';
-        ctx.fillRect(px + 5, wpy, 7, 6);
-      }
+      ctx.fillRect(px + 5, wpy, 8, 7);
+      ctx.fillRect(px + bw - 13, wpy, 8, 7);
+      // Window cross
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(px + 9, wpy, 1, 7);
+      ctx.fillRect(px + 5, wpy + 3, 8, 1);
+      ctx.fillRect(px + bw - 9, wpy, 1, 7);
+      ctx.fillRect(px + bw - 13, wpy + 3, 8, 1);
+    } else if (def.roofColor) {
+      ctx.fillStyle = '#c8e4ff';
+      const wpy = py + Math.round(bh * 0.48);
+      ctx.fillRect(px + 5, wpy, 7, 6);
+    }
 
-      // Door
+    // Door
+    if (def.roofColor) {
       ctx.fillStyle = '#3a2010';
       const dw = 7, dh = 11;
       ctx.fillRect(px + bw / 2 - dw / 2, py + bh - dh, dw, dh);
-
-      // Building name
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = `bold ${bw >= 64 ? 10 : 9}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(b.def.name, px + bw / 2, py + bh / 2 + 4);
-
-      // Worker indicator
-      if (b.def.workers_needed > 0) {
-        const filled = b.workers.length;
-        const total = b.def.workers_needed;
-        ctx.fillStyle = filled === total ? '#50e050' : filled > 0 ? '#f0a030' : '#f04040';
-        ctx.font = '8px sans-serif';
-        ctx.fillText(`${filled}/${total}`, px + bw / 2, py + bh - 3);
-
-        // Red border if inactive
-        if (!b.active) {
-          ctx.strokeStyle = 'rgba(255,60,60,0.7)';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(px + 1, py + 1, bw - 2, bh - 2);
-        }
-      }
-
-      // House: resident count
-      if (b.isHouse) {
-        const res = b.residents.length;
-        const cap = b.def.capacity;
-        ctx.fillStyle = res >= cap ? '#f0a030' : '#50e050';
-        ctx.font = '8px sans-serif';
-        ctx.fillText(`${res}/${cap}`, px + bw / 2, py + bh - 3);
-      }
     }
+
+    // Building icon centered
+    ctx.font = `${Math.min(bw, bh) * 0.4}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.icon, px + bw / 2, py + bh / 2 - 4);
+
+    // Building name
+    ctx.font = `bold ${bw >= 64 ? 10 : 9}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'center';
+    ctx.fillText(def.name, px + bw / 2, py + bh - 3);
   }
 
-  _drawInhabitants() {
+  _drawVisitors() {
     const { ctx, game } = this;
 
-    for (const inh of game.inhabitants) {
-      if (!inh.alive) continue;
+    for (const v of game.visitors) {
+      if (!v.alive) continue;
 
-      const r = inh.isAdult ? 6 : 4;
+      const r = 5;
 
       // Shadow
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
-      ctx.ellipse(inh.x + 1, inh.y + r + 1, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(v.x + 1, v.y + r + 1, r * 0.9, r * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Body
-      ctx.fillStyle = inh.color;
+      ctx.fillStyle = v.color;
       ctx.beginPath();
-      ctx.arc(inh.x, inh.y, r, 0, Math.PI * 2);
+      ctx.arc(v.x, v.y, r, 0, Math.PI * 2);
       ctx.fill();
 
       // Highlight
       ctx.fillStyle = 'rgba(255,255,255,0.38)';
       ctx.beginPath();
-      ctx.arc(inh.x - r * 0.28, inh.y - r * 0.28, r * 0.4, 0, Math.PI * 2);
+      ctx.arc(v.x - r * 0.28, v.y - r * 0.28, r * 0.4, 0, Math.PI * 2);
       ctx.fill();
 
-      // Couple dot (pink)
-      if (inh.partner) {
-        ctx.fillStyle = '#ff80c0';
+      // Low energy warning dot
+      if (v.energy < 20) {
+        ctx.fillStyle = '#ff4040';
         ctx.beginPath();
-        ctx.arc(inh.x + r, inh.y - r, 2.5, 0, Math.PI * 2);
+        ctx.arc(v.x + r, v.y - r, 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Hunger warning
-      if (inh.hunger < 25) {
-        ctx.fillStyle = '#ff3300';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('!', inh.x, inh.y - r - 2);
+      // Watching indicator
+      if (v.state === 'watching') {
+        ctx.fillStyle = '#ffe040';
+        ctx.beginPath();
+        ctx.arc(v.x, v.y - r - 4, 3, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }
@@ -269,5 +399,11 @@ class Renderer {
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(px, py, bw, bh);
     ctx.setLineDash([]);
+
+    // Show icon in ghost
+    ctx.font = `${Math.min(bw, bh) * 0.4}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.icon, px + bw / 2, py + bh / 2);
   }
 }

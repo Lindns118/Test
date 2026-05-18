@@ -10,7 +10,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #111820;
+  background: #1a2e10;
   font-family: 'Segoe UI', system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
@@ -27,7 +27,7 @@ html, body {
 ════════════════════════════════════ */
 #gameCanvas {
   display: block;
-  background: #2a3a1a;
+  background: #3a5a20;
   position: absolute;
   top: 0;
   left: 0;
@@ -41,18 +41,18 @@ html, body {
   top: 0; right: 0;
   width: var(--panel);
   height: 100%;
-  background: #151e2e;
-  color: #dde4f0;
+  background: #172212;
+  color: #ddeedd;
   display: flex;
   flex-direction: column;
-  border-left: 2px solid #1e3050;
+  border-left: 2px solid #2a4020;
   overflow: hidden;
 }
 
 #resources {
   padding: 10px 12px 8px;
-  background: #0d1828;
-  border-bottom: 1px solid #1e3050;
+  background: #0e1a0a;
+  border-bottom: 1px solid #2a4020;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
@@ -73,7 +73,7 @@ html, body {
 #res-time {
   grid-column: 1 / -1;
   text-align: center;
-  color: #a0b8d8;
+  color: #90c878;
   font-size: 12px;
   font-weight: 400;
   background: transparent !important;
@@ -97,11 +97,11 @@ html, body {
 }
 
 #speed-btn {
-  background: #1e3050;
-  color: #a0c8ff;
-  border-color: #2e5080;
+  background: #1e4020;
+  color: #80e0a0;
+  border-color: #2e6030;
 }
-#speed-btn:hover { background: #2e4070; }
+#speed-btn:hover { background: #2e5030; }
 
 #restart-btn {
   background: #301a10;
@@ -122,7 +122,7 @@ html, body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #d4a840;
+  color: #a0d860;
   margin-bottom: 6px;
   flex-shrink: 0;
 }
@@ -137,17 +137,17 @@ html, body {
 }
 
 #build-buttons::-webkit-scrollbar { width: 4px; }
-#build-buttons::-webkit-scrollbar-thumb { background: #2e4070; border-radius: 2px; }
+#build-buttons::-webkit-scrollbar-thumb { background: #2e5030; border-radius: 2px; }
 
 .build-btn {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 6px 8px;
-  background: #1a2840;
-  border: 1px solid #253850;
+  background: #1a2e18;
+  border: 1px solid #254028;
   border-radius: 4px;
-  color: #ccd8ee;
+  color: #ccddc8;
   font-size: 12px;
   cursor: pointer;
   text-align: left;
@@ -157,31 +157,31 @@ html, body {
   user-select: none;
 }
 
-.build-btn:hover  { background: #253858; }
+.build-btn:hover  { background: #253828; }
 .build-btn.active { background: #1e4030; border-color: #40c070; color: #80f0a0; }
 .build-btn.cannot-afford { opacity: 0.42; }
 
 .btn-name { font-weight: 600; }
-.btn-cost { font-size: 11px; color: #8098b8; white-space: nowrap; margin-left: 6px; }
+.btn-cost { font-size: 11px; color: #809880; white-space: nowrap; margin-left: 6px; }
 
 #info-panel {
   padding: 8px 12px;
-  background: #0d1828;
-  border-top: 1px solid #1e3050;
+  background: #0e1a0a;
+  border-top: 1px solid #2a4020;
   flex-shrink: 0;
 }
 
 #info-text {
   font-size: 12px;
-  color: #b0c0d8;
+  color: #a0c898;
   line-height: 1.4;
   min-height: 34px;
 }
 
 #log-panel {
   padding: 6px 12px 10px;
-  background: #0d1828;
-  border-top: 1px solid #1e3050;
+  background: #0e1a0a;
+  border-top: 1px solid #2a4020;
   max-height: 130px;
   overflow: hidden;
   flex-shrink: 0;
@@ -191,7 +191,7 @@ html, body {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: #607090;
+  color: #507050;
   margin-bottom: 4px;
 }
 
@@ -199,7 +199,7 @@ html, body {
 
 #event-log li {
   font-size: 11px;
-  color: #8098b8;
+  color: #809878;
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
@@ -231,10 +231,10 @@ html, body {
     position: fixed;
     top: 0; left: 0; right: 0;
     height: var(--hud-h);
-    background: rgba(10, 18, 32, 0.88);
+    background: rgba(10, 24, 8, 0.88);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(100,200,80,0.15);
     align-items: center;
     justify-content: space-between;
     padding: 0 10px;
@@ -252,7 +252,7 @@ html, body {
   #m-res span {
     font-size: 12px;
     font-weight: 700;
-    color: #dde4f0;
+    color: #ddeedd;
     white-space: nowrap;
   }
 
@@ -265,7 +265,7 @@ html, body {
 
   #m-time {
     font-size: 11px;
-    color: #a0b8d8;
+    color: #90c878;
     white-space: nowrap;
   }
 
@@ -280,9 +280,9 @@ html, body {
   }
 
   #m-speed {
-    background: #1e3050;
-    color: #a0c8ff;
-    border: 1px solid #2e5080;
+    background: #1e4020;
+    color: #80e0a0;
+    border: 1px solid #2e6030;
   }
 
   #m-restart {
@@ -297,10 +297,10 @@ html, body {
     position: fixed;
     bottom: 0; left: 0; right: 0;
     height: var(--bar-h);
-    background: rgba(10, 18, 32, 0.92);
+    background: rgba(10, 24, 8, 0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border-top: 1px solid rgba(255,255,255,0.1);
+    border-top: 1px solid rgba(100,200,80,0.12);
     align-items: center;
     z-index: 100;
     padding: 0 6px;
@@ -327,10 +327,10 @@ html, body {
     justify-content: center;
     min-width: 62px;
     height: 56px;
-    background: #1a2840;
-    border: 2px solid #253850;
+    background: #1a2e18;
+    border: 2px solid #254028;
     border-radius: 8px;
-    color: #ccd8ee;
+    color: #ccddc8;
     font-size: 10px;
     cursor: pointer;
     flex-shrink: 0;
@@ -371,9 +371,9 @@ html, body {
     bottom: calc(var(--bar-h) + 10px);
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: rgba(20, 32, 56, 0.95);
-    color: #e0ecff;
-    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(10, 24, 8, 0.95);
+    color: #d0eec8;
+    border: 1px solid rgba(100,200,80,0.2);
     border-radius: 20px;
     padding: 8px 18px;
     font-size: 13px;
@@ -402,5 +402,5 @@ html, body {
 }
 
 ::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #0d1828; }
-::-webkit-scrollbar-thumb { background: #2e4060; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #0e1a0a; }
+::-webkit-scrollbar-thumb { background: #2e5030; border-radius: 3px; }
