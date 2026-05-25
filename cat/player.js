@@ -192,6 +192,8 @@ class Player {
     if (this.evolution < 2 && FISH_THRESHOLDS[this.evolution] !== undefined) {
       if (this.totalFish >= FISH_THRESHOLDS[this.evolution]) {
         this.evolution++;
+        this.lives = 3; // toutes les vies restaurées à l'évolution
+        this.invincible = Math.max(this.invincible, 120);
       }
     }
   }
