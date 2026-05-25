@@ -94,11 +94,6 @@ class Player {
     // Limite droite
     if (this.x + this.w > level.width) { this.x = level.width - this.w; this.vx = 0; }
 
-    // Tomber hors du niveau
-    if (this.y > level.height + 100) {
-      this._takeDamage();
-    }
-
     // Évolution
     this._checkEvolution();
   }
