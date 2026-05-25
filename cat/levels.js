@@ -47,8 +47,9 @@ const LEVELS = [
       { type: 'fish', x: 1470, y: 292 },
       { type: 'fish', x: 1730, y: 404 },
       { type: 'star', x: 1950, y: 324 },
-      { type: 'fish', x: 2150, y: 420 },
-      { type: 'yarn', x: 2380, y: 324 },
+      { type: 'fish',  x: 2150, y: 420 },
+      { type: 'yarn',  x: 2380, y: 324 },
+      { type: 'heart', x: 1250, y: 292 },
     ],
   },
 
@@ -83,8 +84,8 @@ const LEVELS = [
       { x: 2660, y: 432, w: 160 },
     ],
     spikes: [
-      { x: 420, y: 560, w: 48 },
-      { x: 840, y: 560, w: 48 },
+      { x: 840,  y: 560, w: 48 },
+      { x: 1220, y: 560, w: 48 },
     ],
     enemies: [
       { type: 'bird',  x: 400,  y: 360 },
@@ -106,7 +107,8 @@ const LEVELS = [
       { type: 'fish', x: 2040, y: 292 },
       { type: 'fish', x: 2250, y: 404 },
       { type: 'yarn', x: 2510, y: 292 },
-      { type: 'fish', x: 2700, y: 404 },
+      { type: 'fish',  x: 2700, y: 404 },
+      { type: 'heart', x: 1050, y: 292 },
     ],
   },
 
@@ -168,7 +170,8 @@ const LEVELS = [
       { type: 'fish', x: 2080, y: 292 },
       { type: 'yarn', x: 2310, y: 404 },
       { type: 'fish', x: 2560, y: 324 },
-      { type: 'fish', x: 3060, y: 324 },
+      { type: 'fish',  x: 3060, y: 324 },
+      { type: 'heart', x: 1560, y: 296 },
     ],
   },
 
@@ -241,7 +244,9 @@ const LEVELS = [
       { type: 'fish', x: 2440, y: 276 },
       { type: 'fish', x: 2680, y: 388 },
       { type: 'fish', x: 2920, y: 292 },
-      { type: 'fish', x: 3360, y: 292 },
+      { type: 'fish',  x: 3360, y: 292 },
+      { type: 'heart', x: 1500, y: 276 },
+      { type: 'heart', x: 2920, y: 292 },
     ],
   },
 
@@ -307,7 +312,8 @@ const LEVELS = [
       { type: 'fish', x: 2320, y: 292 },
       { type: 'star', x: 2930, y: 260 },
       { type: 'fish', x: 3220, y: 404 },
-      { type: 'fish', x: 3520, y: 292 },
+      { type: 'fish',  x: 3520, y: 292 },
+      { type: 'heart', x: 1710, y: 260 },
     ],
   },
 ];

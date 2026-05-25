@@ -184,6 +184,7 @@ class Player {
 
   collectYarn()  { this.score += 50; }
   collectStar()  { this.score += 200; this.invincible = Math.max(this.invincible, 300); }
+  collectHeart() { this.lives = Math.min(this.lives + 1, 5); this.score += 300; }
 
   addScore(n) { this.score += n; }
 
@@ -191,6 +192,8 @@ class Player {
     if (this.evolution < 2 && FISH_THRESHOLDS[this.evolution] !== undefined) {
       if (this.totalFish >= FISH_THRESHOLDS[this.evolution]) {
         this.evolution++;
+        this.lives = 3; // toutes les vies restaurées à l'évolution
+        this.invincible = Math.max(this.invincible, 120);
       }
     }
   }

@@ -51,20 +51,17 @@ class Game {
       }
       if (e.code === 'Enter') {
         if (this.state === 'menu') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         } else if (this.state === 'paused') {
           this.state = 'playing';
         } else if (this.state === 'gameover') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         } else if (this.state === 'win') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         }
+      }
+      if (e.code === 'KeyN' && this.state === 'gameover') {
+        this._continueCurrentLevel();
       }
     });
 
@@ -89,9 +86,10 @@ class Game {
     const onStart = (e) => {
       e.preventDefault();
 
-      // Menus: tap anywhere to continue
+      // Menus: tap to continue (pass X for gameover choice)
       if (this.state !== 'playing' && this.state !== 'paused') {
-        this._menuTap();
+        const ft = e.changedTouches[0];
+        this._menuTap(ft ? ft.clientX : this.W / 2);
         return;
       }
 
@@ -151,14 +149,36 @@ class Game {
     this.canvas.addEventListener('touchcancel',onEnd,   { passive: false });
   }
 
-  _menuTap() {
+  _menuTap(touchX = this.W / 2) {
     if (this.state === 'menu') {
-      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+      this._restartFromLevelOne();
     } else if (this.state === 'paused') {
       this.state = 'playing';
-    } else if (this.state === 'gameover' || this.state === 'win') {
-      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+    } else if (this.state === 'gameover') {
+      // Right half = continue current level, left half = restart from 1
+      if (touchX >= this.W / 2) this._continueCurrentLevel();
+      else this._restartFromLevelOne();
+    } else if (this.state === 'win') {
+      this._restartFromLevelOne();
     }
+  }
+
+  _restartFromLevelOne() {
+    this.levelIndex = 0;
+    this.startLevel(0);
+    this.player.lives     = 3;
+    this.player.score     = 0;
+    this.player.totalFish = 0;
+    this.player.evolution = 0;
+    this.state = 'playing';
+  }
+
+  _continueCurrentLevel() {
+    const idx = this._gameOverLevelIndex || 0;
+    this.levelIndex = idx;
+    this.startLevel(idx); // carries over score/fish/evolution from dead player
+    this.player.lives = 1;
+    this.state = 'playing';
   }
 
   startLevel(idx) {
@@ -318,6 +338,9 @@ class Game {
         } else if (c.type === 'star') {
           player.collectStar();
           this._spawnParticles(c.x + 10, c.y + 10, '#ffee00', 8);
+        } else if (c.type === 'heart') {
+          player.collectHeart();
+          this._spawnParticles(c.x + 10, c.y + 10, '#ff4488', 10);
         }
       }
     }
@@ -338,6 +361,7 @@ class Game {
 
     // Death check
     if (player.dead) {
+      this._gameOverLevelIndex = this.levelIndex;
       this.state = 'gameover';
     }
 
@@ -775,6 +799,23 @@ class Game {
       ctx.beginPath();
       ctx.arc(0, 0, 10, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    } else if (c.type === 'heart') {
+      ctx.save();
+      ctx.translate(c.x + 10, c.y + 10 + pulse);
+      ctx.fillStyle = '#ff2255';
+      ctx.shadowColor = '#ff88aa'; ctx.shadowBlur = 14;
+      const s = 10;
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.35);
+      ctx.bezierCurveTo(0, 0, -s, 0, -s, s * 0.35);
+      ctx.bezierCurveTo(-s, s * 0.75, 0, s * 1.3, 0, s * 1.6);
+      ctx.bezierCurveTo(0, s * 1.3, s, s * 0.75, s, s * 0.35);
+      ctx.bezierCurveTo(s, 0, 0, 0, 0, s * 0.35);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath(); ctx.ellipse(-4, 2, 3, 2, -0.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     } else if (c.type === 'star') {
       // Star: 5-point yellow
@@ -1299,31 +1340,35 @@ class Game {
       ctx.globalAlpha = 1;
     }
 
-    // ── Cape (behind body) ──
+    // ── Cape + Boots : uniquement stade 1+ (Chat Potté) ──
     const capeSwing = isMoving ? Math.sin(tick * 0.15) * 6 : 0;
-    ctx.fillStyle = player.evolution === 2 ? '#6B0000' : '#8B1010';
-    ctx.beginPath();
-    ctx.moveTo(-w * 0.25, -h * 0.15);
-    ctx.quadraticCurveTo(-w * 0.65, h * 0.1 + capeSwing, -w * 0.45, h * 0.42 + capeSwing * 0.5);
-    ctx.lineTo(-w * 0.05, h * 0.38);
-    ctx.lineTo(-w * 0.05, -h * 0.18);
-    ctx.closePath();
-    ctx.fill();
-
-    // ── Boots (behind body) ──
-    const legSwing = isMoving ? Math.sin(tick * 0.3) * 3 : 0;
-    const bootColor = '#3a2010';
-    const cuffColor = '#5a3820';
-    // Back boot
-    ctx.fillStyle = bootColor;
-    ctx.beginPath(); ctx.roundRect(-w * 0.22, h * 0.12, w * 0.26, h * 0.42, 3); ctx.fill();
-    ctx.fillStyle = cuffColor;
-    ctx.fillRect(-w * 0.24, h * 0.12, w * 0.3, h * 0.1);
-    // Front boot (animated)
-    ctx.fillStyle = bootColor;
-    ctx.beginPath(); ctx.roundRect(w * 0.0 - legSwing, h * 0.1, w * 0.26, h * 0.44, 3); ctx.fill();
-    ctx.fillStyle = cuffColor;
-    ctx.fillRect(w * 0.0 - legSwing - 0.02 * w, h * 0.1, w * 0.3, h * 0.1);
+    const legSwing  = isMoving ? Math.sin(tick * 0.3)  * 3 : 0;
+    if (player.evolution >= 1) {
+      // Cape
+      ctx.fillStyle = player.evolution === 2 ? '#5a0000' : '#8B1010';
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.25, -h * 0.15);
+      ctx.quadraticCurveTo(-w * 0.65, h * 0.1 + capeSwing, -w * 0.45, h * 0.42 + capeSwing * 0.5);
+      ctx.lineTo(-w * 0.05, h * 0.38);
+      ctx.lineTo(-w * 0.05, -h * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      // Boots
+      const bootColor = '#3a2010', cuffColor = '#5a3820';
+      ctx.fillStyle = bootColor;
+      ctx.beginPath(); ctx.roundRect(-w * 0.22, h * 0.12, w * 0.26, h * 0.42, 3); ctx.fill();
+      ctx.fillStyle = cuffColor;
+      ctx.fillRect(-w * 0.24, h * 0.12, w * 0.3, h * 0.1);
+      ctx.fillStyle = bootColor;
+      ctx.beginPath(); ctx.roundRect(w * 0.0 - legSwing, h * 0.1, w * 0.26, h * 0.44, 3); ctx.fill();
+      ctx.fillStyle = cuffColor;
+      ctx.fillRect(w * 0.0 - legSwing - 0.02 * w, h * 0.1, w * 0.3, h * 0.1);
+    } else {
+      // Stade 0 : petites pattes arrondies (chaton)
+      ctx.fillStyle = st.earColor;
+      ctx.beginPath(); ctx.ellipse(-w * 0.12, h * 0.42, w * 0.16, h * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse( w * 0.12 - legSwing * 0.5, h * 0.44, w * 0.16, h * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+    }
 
     // ── Body ──
     ctx.fillStyle = bodyColor;
@@ -1337,11 +1382,13 @@ class Game {
     ctx.ellipse(w * 0.04, h * 0.08, w * 0.22, h * 0.22, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Belt sash (diagonal)
-    ctx.strokeStyle = '#8B6020'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(-w * 0.3, -h * 0.08); ctx.lineTo(w * 0.2, h * 0.18); ctx.stroke();
-    ctx.fillStyle = '#d4a800';
-    ctx.fillRect(-w * 0.05, h * 0.03, 8, 5);
+    // Belt sash (stade 1+ seulement)
+    if (player.evolution >= 1) {
+      ctx.strokeStyle = '#8B6020'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-w * 0.3, -h * 0.08); ctx.lineTo(w * 0.2, h * 0.18); ctx.stroke();
+      ctx.fillStyle = '#d4a800';
+      ctx.fillRect(-w * 0.05, h * 0.03, 8, 5);
+    }
 
     // Tiger stripes (stage 2)
     if (player.evolution === 2) {
@@ -1366,31 +1413,30 @@ class Game {
     ctx.lineTo(hcx + hr * 0.72, hcy - hr * 1.1); ctx.lineTo(hcx + hr * 0.85, hcy - hr * 0.35);
     ctx.closePath(); ctx.fill();
 
-    // ── Hat (wide-brimmed Zorro/Potté) ──
-    const hatColor = player.evolution === 2 ? '#111' : '#1a1a1a';
-    // Crown
-    ctx.fillStyle = hatColor;
-    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.7, hr * 0.65, hr * 0.55, -0.08, 0, Math.PI * 2);
-    ctx.fill();
-    // Brim (wide!)
-    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.22, hr * 1.5, hr * 0.22, 0.05, 0, Math.PI * 2);
-    ctx.fill();
-    // Gold band on hat
-    ctx.strokeStyle = '#c4960a'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.3, hr * 0.64, hr * 0.14, -0.08, 0, Math.PI * 2);
-    ctx.stroke();
-    // Feather (red plume)
-    ctx.strokeStyle = '#cc2020'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(hcx + hr * 0.55, hcy - hr * 0.4);
-    ctx.quadraticCurveTo(hcx + hr * 1.3, hcy - hr * 1.8, hcx + hr * 0.6, hcy - hr * 2.1);
-    ctx.stroke();
-    ctx.strokeStyle = '#ff5555'; ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(hcx + hr * 0.65, hcy - hr * 0.45);
-    ctx.quadraticCurveTo(hcx + hr * 1.45, hcy - hr * 1.85, hcx + hr * 0.7, hcy - hr * 2.15);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
+    // ── Chapeau (stade 1+) ou nœud chaton (stade 0) ──
+    if (player.evolution >= 1) {
+      // Chapeau Chat Potté
+      const hatColor = player.evolution === 2 ? '#0a0a0a' : '#1a1a1a';
+      ctx.fillStyle = hatColor;
+      ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.7, hr * 0.65, hr * 0.55, -0.08, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.22, hr * 1.5, hr * 0.22, 0.05, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = player.evolution === 2 ? '#ff8800' : '#c4960a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.3, hr * 0.64, hr * 0.14, -0.08, 0, Math.PI * 2); ctx.stroke();
+      // Plume
+      const plumeColor = player.evolution === 2 ? '#ff4400' : '#cc2020';
+      ctx.strokeStyle = plumeColor; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(hcx + hr * 0.55, hcy - hr * 0.4); ctx.quadraticCurveTo(hcx + hr * 1.3, hcy - hr * 1.8, hcx + hr * 0.6, hcy - hr * 2.1); ctx.stroke();
+      ctx.strokeStyle = player.evolution === 2 ? '#ffaa00' : '#ff5555'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(hcx + hr * 0.65, hcy - hr * 0.45); ctx.quadraticCurveTo(hcx + hr * 1.45, hcy - hr * 1.85, hcx + hr * 0.7, hcy - hr * 2.15); ctx.stroke();
+      ctx.lineCap = 'butt';
+    } else {
+      // Stade 0 : petit nœud rose sur la tête (chaton)
+      const bx = hcx - hr * 0.05, by = hcy - hr * 1.05;
+      ctx.fillStyle = '#ff88cc';
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.bezierCurveTo(bx - 10, by - 6, bx - 12, by + 6, bx, by + 2); ctx.bezierCurveTo(bx + 12, by + 6, bx + 10, by - 6, bx, by); ctx.fill();
+      ctx.fillStyle = '#ff44aa';
+      ctx.beginPath(); ctx.arc(bx, by + 1, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
 
     // ── BIG Eyes (signature Puss in Boots!) ──
     const elx = hcx - hr * 0.3, erx = hcx + hr * 0.32, ey = hcy + hr * 0.05;
@@ -1458,27 +1504,47 @@ class Game {
     ctx.beginPath(); ctx.arc(-w * 0.92 + tailSwing * 1.4, -h * 0.48, 4, 0, Math.PI * 2); ctx.fill();
     ctx.lineCap = 'butt';
 
-    // ── Sword attack ──
+    // ── Attaque ──
     if (attacking) {
       const alpha = player.attackTimer / 16;
       ctx.save(); ctx.globalAlpha = alpha;
-      // Blade
-      ctx.strokeStyle = '#c8d8e8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(w * 0.35, -h * 0.1); ctx.lineTo(w * 0.35 + 28, -h * 0.1 - 22); ctx.stroke();
-      // Guard (crossguard)
-      ctx.strokeStyle = '#d4a800'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(w * 0.35 + 7, -h * 0.1 - 8); ctx.lineTo(w * 0.35 + 20, -h * 0.1 - 2); ctx.stroke();
-      // Slash arc
-      ctx.strokeStyle = 'rgba(200,240,255,0.7)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(w * 0.3, -h * 0.1, 26, -Math.PI * 0.75, -Math.PI * 0.05); ctx.stroke();
+      if (player.evolution === 0) {
+        // Stade 0 : coup de patte
+        ctx.fillStyle = st.color;
+        ctx.beginPath(); ctx.arc(w * 0.58, -h * 0.06, w * 0.24, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+        for (let ci = -1; ci <= 1; ci++) {
+          ctx.beginPath(); ctx.moveTo(w * 0.74, -h * 0.06 + ci * 5); ctx.lineTo(w * 0.9, -h * 0.06 + ci * 7); ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+      } else {
+        // Stade 1+ : épée
+        ctx.strokeStyle = '#c8d8e8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(w * 0.35, -h * 0.1); ctx.lineTo(w * 0.35 + 28, -h * 0.1 - 22); ctx.stroke();
+        ctx.strokeStyle = '#d4a800'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(w * 0.35 + 7, -h * 0.1 - 8); ctx.lineTo(w * 0.35 + 20, -h * 0.1 - 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(200,240,255,0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(w * 0.3, -h * 0.1, 26, -Math.PI * 0.75, -Math.PI * 0.05); ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
       ctx.restore();
     }
 
-    // Stage 2 aura
-    if (player.evolution === 2) {
-      ctx.globalAlpha = 0.1 + Math.sin(tick * 0.08) * 0.05;
-      ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.ellipse(0, 0, w * 0.8, h * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
+    // ── Aura selon stade ──
+    if (player.evolution === 1) {
+      // Stade 1 : halo doré discret
+      ctx.globalAlpha = 0.07 + Math.sin(tick * 0.06) * 0.03;
+      ctx.strokeStyle = '#ffcc44'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(0, 0, w * 0.82, h * 0.82, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (player.evolution === 2) {
+      // Stade 2 : aura de feu (anneaux multiples)
+      for (let ri = 3; ri >= 1; ri--) {
+        ctx.globalAlpha = (0.09 + Math.sin(tick * 0.09 + ri) * 0.04) / ri;
+        ctx.strokeStyle = ri === 1 ? '#ff8800' : ri === 2 ? '#ff4400' : '#ff0000';
+        ctx.lineWidth = 2 + ri;
+        ctx.beginPath(); ctx.ellipse(0, 0, w * (0.72 + ri * 0.18), h * (0.72 + ri * 0.18), 0, 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
 
@@ -1797,26 +1863,76 @@ class Game {
 
   _drawGameOver() {
     const ctx = this.ctx;
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(0, 0, this.W, this.H);
+    const W = this.W, H = this.H;
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(0, 0, W, H);
 
+    // Title
     ctx.textAlign = 'center';
-    ctx.font = 'bold 72px monospace';
+    ctx.font = `bold ${Math.min(72, W / 8)}px monospace`;
     ctx.fillStyle = '#ff2222';
-    ctx.shadowColor = '#880000';
-    ctx.shadowBlur = 24;
-    ctx.fillText('GAME OVER', this.W / 2, this.H / 2 - 40);
+    ctx.shadowColor = '#880000'; ctx.shadowBlur = 24;
+    ctx.fillText('GAME OVER', W / 2, H * 0.18);
     ctx.shadowBlur = 0;
 
-    ctx.font = 'bold 28px monospace';
+    ctx.font = `bold ${Math.min(24, W / 14)}px monospace`;
     ctx.fillStyle = '#ffaa44';
-    ctx.fillText(`Score final : ${this.player ? this.player.score : 0}`, this.W / 2, this.H / 2 + 20);
+    ctx.fillText(`Score : ${this.player ? this.player.score : 0}`, W / 2, H * 0.3);
 
-    const blink = Math.floor(Date.now() / 700) % 2 === 0;
-    ctx.font = '22px monospace';
-    ctx.fillStyle = blink ? '#ffffff' : '#888888';
-    ctx.fillText('Touchez l\'écran / ENTRÉE pour recommencer', this.W / 2, this.H / 2 + 70);
+    // Divider
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2, H * 0.37); ctx.lineTo(W / 2, H * 0.88); ctx.stroke();
+
+    const blink = Math.floor(Date.now() / 600) % 2 === 0;
+    const lvlName = this.currentLevel ? this.currentLevel.name : '';
+
+    // ── Option gauche : Recommencer Niveau 1 ──
+    ctx.fillStyle = 'rgba(200,50,50,0.12)';
+    ctx.fillRect(0, H * 0.36, W / 2, H * 0.54);
+
+    ctx.font = `bold ${Math.min(20, W / 18)}px monospace`;
+    ctx.fillStyle = '#ff6644';
+    ctx.fillText('Recommencer', W / 4, H * 0.48);
+    ctx.font = `${Math.min(16, W / 22)}px monospace`;
+    ctx.fillStyle = '#ffaa88';
+    ctx.fillText('Niveau 1 — 3 vies', W / 4, H * 0.56);
+    // mini cœurs
+    for (let i = 0; i < 3; i++) this._drawMiniHeart(W / 4 - 22 + i * 22, H * 0.62);
+    ctx.font = `${Math.min(13, W / 26)}px monospace`;
+    ctx.fillStyle = blink ? '#fff' : '#777';
+    ctx.fillText('◀ Gauche / Entrée', W / 4, H * 0.74);
+
+    // ── Option droite : Continuer niveau actuel ──
+    ctx.fillStyle = 'rgba(50,100,220,0.12)';
+    ctx.fillRect(W / 2, H * 0.36, W / 2, H * 0.54);
+
+    ctx.font = `bold ${Math.min(20, W / 18)}px monospace`;
+    ctx.fillStyle = '#4488ff';
+    ctx.fillText('Continuer', W * 3 / 4, H * 0.48);
+    ctx.font = `${Math.min(16, W / 22)}px monospace`;
+    ctx.fillStyle = '#88aaff';
+    ctx.fillText(`${lvlName} — 1 vie`, W * 3 / 4, H * 0.56);
+    this._drawMiniHeart(W * 3 / 4, H * 0.62);
+    ctx.font = `${Math.min(13, W / 26)}px monospace`;
+    ctx.fillStyle = blink ? '#fff' : '#777';
+    ctx.fillText('Droite / N', W * 3 / 4, H * 0.74);
+
     ctx.textAlign = 'left';
+  }
+
+  _drawMiniHeart(x, y, size = 9) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#ff2255';
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.35);
+    ctx.bezierCurveTo(0, 0, -size, 0, -size, size * 0.35);
+    ctx.bezierCurveTo(-size, size * 0.75, 0, size * 1.3, 0, size * 1.6);
+    ctx.bezierCurveTo(0, size * 1.3, size, size * 0.75, size, size * 0.35);
+    ctx.bezierCurveTo(size, 0, 0, 0, 0, size * 0.35);
+    ctx.fill();
+    ctx.restore();
   }
 
   _drawWin() {
