@@ -309,6 +309,18 @@ class Game {
     }
     this.projectiles = this.projectiles.filter(p => p.alive);
 
+    // Chute hors de la map → perd une vie et respawn au départ
+    if (player.y > lvl.height + 80 && !player.dead && player.invincible <= 0) {
+      player._takeDamage();
+      if (!player.dead) {
+        player.x  = lvl.startX;
+        player.y  = lvl.startY;
+        player.vx = 0; player.vy = 0;
+        player.invincible = Math.max(player.invincible, 200);
+        this._spawnParticles(player.cx, player.cy, '#ffaa00', 12);
+      }
+    }
+
     // Detect evolution change
     if (player.evolution > prevEvolution) {
       this.showEvolveMsg = 180;

@@ -14,7 +14,7 @@ const LEVELS = [
     bgTop: '#87ceeb', bgBottom: '#c8f0a0',
     groundColor: '#3a6820',
     width: 2560, height: 640,
-    startX: 80, startY: 560,
+    startX: 60, startY: 530,
     exitX: 2460, exitY: 550,
     platforms: [
       { x: 0,    y: 576, w: 2560, h: 64 }, // sol
@@ -59,7 +59,7 @@ const LEVELS = [
     bgTop: '#ff6030', bgBottom: '#803020',
     groundColor: '#504040',
     width: 2880, height: 640,
-    startX: 80, startY: 560,
+    startX: 60, startY: 530,
     exitX: 2780, exitY: 550,
     platforms: [
       { x: 0,    y: 576, w: 400,  h: 64 },
@@ -118,7 +118,7 @@ const LEVELS = [
     bgTop: '#1a1020', bgBottom: '#2a2030',
     groundColor: '#302828',
     width: 3200, height: 640,
-    startX: 80, startY: 560,
+    startX: 60, startY: 530,
     exitX: 3100, exitY: 550,
     platforms: [
       { x: 0,    y: 576, w: 3200, h: 64 },
@@ -181,7 +181,7 @@ const LEVELS = [
     bgTop: '#0a0820', bgBottom: '#1a1540',
     groundColor: '#303040',
     width: 3520, height: 640,
-    startX: 80, startY: 560,
+    startX: 60, startY: 530,
     exitX: 3420, exitY: 550,
     platforms: [
       { x: 0,    y: 576, w: 300,  h: 64 },
@@ -256,7 +256,7 @@ const LEVELS = [
     bgTop: '#200008', bgBottom: '#400010',
     groundColor: '#282020',
     width: 3840, height: 640,
-    startX: 80, startY: 560,
+    startX: 60, startY: 530,
     exitX: 3740, exitY: 550,
     platforms: [
       { x: 0,    y: 576, w: 3840, h: 64 }, // sol continu
