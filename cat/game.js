@@ -196,16 +196,22 @@ class Game {
   }
 
   _update() {
-    // Build current input from keys + mobile
-    const k = this._keysDown;
-    const m = this._mobileState || {};
+    // Reset all inputs each frame so nothing stays sticky
+    this.input.left          = false;
+    this.input.right         = false;
+    this.input.jumpPressed   = false;
+    this.input.dashPressed   = false;
+    this.input.attackPressed = false;
+
+    const k  = this._keysDown;
     const jp = this._keyJustPressed;
 
-    // Joystick input
+    // ── Joystick (right zone) ──
     const DEAD = 18;
     if (this._joy.active) {
       if (this._joy.dx >  DEAD) this.input.right = true;
       if (this._joy.dx < -DEAD) this.input.left  = true;
+      // Jump on rising edge of upward flick
       const joyUp = this._joy.dy < -DEAD;
       if (joyUp && !this._prevJoyUp) this.input.jumpPressed = true;
       this._prevJoyUp = joyUp;
@@ -213,21 +219,16 @@ class Game {
       this._prevJoyUp = false;
     }
 
-    this.input.left  = !!(k['ArrowLeft']  || k['KeyA'] || this.input.left);
-    this.input.right = !!(k['ArrowRight'] || k['KeyD'] || this.input.right);
+    // ── Keyboard (ORed on top) ──
+    if (k['ArrowLeft']  || k['KeyA'])  this.input.left  = true;
+    if (k['ArrowRight'] || k['KeyD'])  this.input.right = true;
+    if (jp['ArrowUp']   || jp['KeyW'] || jp['Space']) this.input.jumpPressed  = true;
+    if (jp['ShiftLeft'] || jp['ShiftRight'] || jp['KeyX']) this.input.dashPressed = true;
+    if (jp['KeyZ']      || jp['ArrowDown'])            this.input.attackPressed = true;
 
-    // Jump: just-pressed (keyboard)
-    this.input.jumpPressed = !!(this.input.jumpPressed ||
-      jp['ArrowUp'] || jp['KeyW'] || jp['Space']);
-
-    // Dash: just-pressed
-    this.input.dashPressed = !!(jp['ShiftLeft'] || jp['ShiftRight'] || jp['KeyX'] ||
-      this._mobileDash);
-    this._mobileDash = false;
-
-    // Attack: just-pressed
-    this.input.attackPressed = !!(jp['KeyZ'] || jp['ArrowDown'] || this._mobileAttack);
-    this._mobileAttack = false;
+    // ── Mobile one-shot flags ──
+    if (this._mobileDash)   { this.input.dashPressed   = true; this._mobileDash   = false; }
+    if (this._mobileAttack) { this.input.attackPressed = true; this._mobileAttack = false; }
 
     // Reset just-pressed
     this._keyJustPressed = {};
