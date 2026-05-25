@@ -74,40 +74,91 @@ class Game {
   }
 
   _setupMobileInput() {
-    const map = {
-      'mLeft':   'left',
-      'mRight':  'right',
-      'mJump':   'jumpMobile',
-      'mAttack': 'attackMobile',
-      'mDash':   'dashMobile',
+    // Joystick (right side) — appears where user touches
+    this._joy = { active: false, id: -1, baseX: 0, baseY: 0, dx: 0, dy: 0 };
+    // Action button (left side)
+    this._act = { active: false, id: -1, lastTap: 0 };
+    // Just-pressed flags
+    this._mobileJump    = false;
+    this._mobileAttack  = false;
+    this._mobileDash    = false;
+    this._prevJoyUp     = false;
+
+    const JOY_R = 60; // max thumb travel
+
+    const onStart = (e) => {
+      e.preventDefault();
+
+      // Menus: tap anywhere to continue
+      if (this.state !== 'playing' && this.state !== 'paused') {
+        this._menuTap();
+        return;
+      }
+
+      for (const t of e.changedTouches) {
+        const tx = t.clientX, ty = t.clientY;
+        const rightZone = tx > this.W * 0.45 && ty > this.H * 0.45;
+        const leftZone  = tx < this.W * 0.55 && ty > this.H * 0.45;
+
+        if (!this._joy.active && rightZone) {
+          this._joy.active = true;
+          this._joy.id     = t.identifier;
+          this._joy.baseX  = tx;
+          this._joy.baseY  = ty;
+          this._joy.dx = 0; this._joy.dy = 0;
+        } else if (!this._act.active && leftZone) {
+          this._act.active = true;
+          this._act.id     = t.identifier;
+          this._mobileAttack = true;
+          const now = Date.now();
+          if (now - this._act.lastTap < 320) this._mobileDash = true;
+          this._act.lastTap = now;
+        }
+      }
     };
 
-    const bind = (id, action) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        this._mobileState = this._mobileState || {};
-        this._mobileState[action] = true;
-      }, { passive: false });
-      el.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        this._mobileState = this._mobileState || {};
-        this._mobileState[action] = false;
-      }, { passive: false });
+    const onMove = (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === this._joy.id) {
+          const rdx = t.clientX - this._joy.baseX;
+          const rdy = t.clientY - this._joy.baseY;
+          const dist = Math.hypot(rdx, rdy);
+          const clamped = Math.min(dist, JOY_R);
+          const angle = Math.atan2(rdy, rdx);
+          this._joy.dx = Math.cos(angle) * clamped;
+          this._joy.dy = Math.sin(angle) * clamped;
+        }
+      }
     };
 
-    bind('m-left', 'left');
-    bind('m-right', 'right');
-    bind('m-jump', 'jumpMobile');
-    bind('m-attack', 'attackMobile');
-    bind('m-dash', 'dashMobile');
-
-    this._mobileState = {
-      left: false, right: false,
-      jumpMobile: false, attackMobile: false, dashMobile: false,
+    const onEnd = (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === this._joy.id) {
+          this._joy.active = false; this._joy.id = -1;
+          this._joy.dx = 0; this._joy.dy = 0;
+        }
+        if (t.identifier === this._act.id) {
+          this._act.active = false; this._act.id = -1;
+        }
+      }
     };
-    this._prevMobile = { jumpMobile: false, attackMobile: false, dashMobile: false };
+
+    this.canvas.addEventListener('touchstart', onStart, { passive: false });
+    this.canvas.addEventListener('touchmove',  onMove,  { passive: false });
+    this.canvas.addEventListener('touchend',   onEnd,   { passive: false });
+    this.canvas.addEventListener('touchcancel',onEnd,   { passive: false });
+  }
+
+  _menuTap() {
+    if (this.state === 'menu') {
+      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+    } else if (this.state === 'paused') {
+      this.state = 'playing';
+    } else if (this.state === 'gameover' || this.state === 'win') {
+      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+    }
   }
 
   startLevel(idx) {
@@ -150,30 +201,36 @@ class Game {
     const m = this._mobileState || {};
     const jp = this._keyJustPressed;
 
-    this.input.left  = !!(k['ArrowLeft']  || k['KeyA'] || m.left);
-    this.input.right = !!(k['ArrowRight'] || k['KeyD'] || m.right);
+    // Joystick input
+    const DEAD = 18;
+    if (this._joy.active) {
+      if (this._joy.dx >  DEAD) this.input.right = true;
+      if (this._joy.dx < -DEAD) this.input.left  = true;
+      const joyUp = this._joy.dy < -DEAD;
+      if (joyUp && !this._prevJoyUp) this.input.jumpPressed = true;
+      this._prevJoyUp = joyUp;
+    } else {
+      this._prevJoyUp = false;
+    }
 
-    // Jump: just-pressed
-    const jumpKeyNow = !!(k['ArrowUp'] || k['KeyW'] || k['Space']);
-    const jumpMobileNow = !!m.jumpMobile;
-    this.input.jumpPressed = !!(jp['ArrowUp'] || jp['KeyW'] || jp['Space'] ||
-      (jumpMobileNow && !this._prevMobile.jumpMobile));
+    this.input.left  = !!(k['ArrowLeft']  || k['KeyA'] || this.input.left);
+    this.input.right = !!(k['ArrowRight'] || k['KeyD'] || this.input.right);
+
+    // Jump: just-pressed (keyboard)
+    this.input.jumpPressed = !!(this.input.jumpPressed ||
+      jp['ArrowUp'] || jp['KeyW'] || jp['Space']);
 
     // Dash: just-pressed
-    const dashMobileNow = !!m.dashMobile;
     this.input.dashPressed = !!(jp['ShiftLeft'] || jp['ShiftRight'] || jp['KeyX'] ||
-      (dashMobileNow && !this._prevMobile.dashMobile));
+      this._mobileDash);
+    this._mobileDash = false;
 
     // Attack: just-pressed
-    const attackMobileNow = !!m.attackMobile;
-    this.input.attackPressed = !!(jp['KeyZ'] || jp['ArrowDown'] ||
-      (attackMobileNow && !this._prevMobile.attackMobile));
+    this.input.attackPressed = !!(jp['KeyZ'] || jp['ArrowDown'] || this._mobileAttack);
+    this._mobileAttack = false;
 
     // Reset just-pressed
     this._keyJustPressed = {};
-    this._prevMobile.jumpMobile   = jumpMobileNow;
-    this._prevMobile.dashMobile   = dashMobileNow;
-    this._prevMobile.attackMobile = attackMobileNow;
 
     if (this.state !== 'playing') {
       // Update confetti for win screen
@@ -485,6 +542,58 @@ class Game {
 
     // HUD (screen space)
     this._drawHUD();
+    // Mobile controls overlay
+    this._drawMobileControls();
+  }
+
+  _drawMobileControls() {
+    if (this.W > 768) return; // desktop only skip
+    const ctx = this.ctx;
+    const JOY_R = 60;
+
+    // ── Joystick (right side) ──
+    const joy = this._joy;
+    const jbx = joy.active ? joy.baseX : this.W - 100;
+    const jby = joy.active ? joy.baseY : this.H - 100;
+    const thumbX = jbx + joy.dx;
+    const thumbY = jby + joy.dy;
+
+    // Base ring
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(jbx, jby, JOY_R, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(jbx, jby, JOY_R, 0, Math.PI * 2); ctx.stroke();
+
+    // Direction hints
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('▲', jbx, jby - JOY_R + 14);
+    ctx.fillText('◀', jbx - JOY_R + 14, jby);
+    ctx.fillText('▶', jbx + JOY_R - 14, jby);
+
+    // Thumb
+    ctx.globalAlpha = joy.active ? 0.65 : 0.35;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(thumbX, thumbY, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // ── Action button (left side) ──
+    const ax = 90, ay = this.H - 100, ar = 50;
+    ctx.save();
+    ctx.globalAlpha = this._act.active ? 0.55 : 0.28;
+    ctx.fillStyle = '#ff7733';
+    ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ax, ay, ar, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 15px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Action', ax, ay);
+    ctx.restore();
   }
 
   _drawBgDecos(lvl) {
@@ -1164,184 +1273,211 @@ class Game {
     const ctx = this.ctx;
     const st = player.stage;
 
-    // Flash if invincible
-    if (player.invincible > 0 && Math.floor(player.animTick / 6) % 2 === 1) {
-      return; // blink invisible
-    }
+    if (player.invincible > 0 && Math.floor(player.animTick / 6) % 2 === 1) return;
 
-    const x = player.x;
-    const y = player.y;
-    const w = player.w;
-    const h = player.h;
-    const facing = player.facingRight ? 1 : -1;
+    const x = player.x, y = player.y, w = player.w, h = player.h;
     const isMoving = Math.abs(player.vx) > 0.5;
     const tick = player.animTick;
+    const hurt = player.hurtTimer > 0;
+    const attacking = player.attackTimer > 0;
+    const bodyColor = hurt ? '#ffffff' : st.color;
 
     ctx.save();
     ctx.translate(x + w / 2, y + h / 2);
     if (!player.facingRight) ctx.scale(-1, 1);
 
-    // Dash trail
+    // ── Dash trail ──
     if (player.dashTimer > 0) {
-      for (let i = 1; i <= 5; i++) {
-        ctx.globalAlpha = 0.08 * (6 - i);
+      for (let i = 1; i <= 4; i++) {
+        ctx.globalAlpha = 0.07 * (5 - i);
         ctx.fillStyle = st.color;
         ctx.beginPath();
-        ctx.ellipse(-i * 8 * (player.facingRight ? 1 : -1) + (player.facingRight ? -w/2 : w/2),
-          0, w * 0.4, h * 0.4, 0, 0, Math.PI * 2);
+        ctx.ellipse(-i * 9, 0, w * 0.38, h * 0.38, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
     }
 
-    // Body
-    ctx.fillStyle = player.hurtTimer > 0 ? '#ffffff' : st.color;
+    // ── Cape (behind body) ──
+    const capeSwing = isMoving ? Math.sin(tick * 0.15) * 6 : 0;
+    ctx.fillStyle = player.evolution === 2 ? '#6B0000' : '#8B1010';
     ctx.beginPath();
-    ctx.ellipse(0, 4, w * 0.45, h * 0.42, 0, 0, Math.PI * 2);
+    ctx.moveTo(-w * 0.25, -h * 0.15);
+    ctx.quadraticCurveTo(-w * 0.65, h * 0.1 + capeSwing, -w * 0.45, h * 0.42 + capeSwing * 0.5);
+    ctx.lineTo(-w * 0.05, h * 0.38);
+    ctx.lineTo(-w * 0.05, -h * 0.18);
+    ctx.closePath();
     ctx.fill();
 
-    // Belly
-    ctx.fillStyle = st.bellyColor;
+    // ── Boots (behind body) ──
+    const legSwing = isMoving ? Math.sin(tick * 0.3) * 3 : 0;
+    const bootColor = '#3a2010';
+    const cuffColor = '#5a3820';
+    // Back boot
+    ctx.fillStyle = bootColor;
+    ctx.beginPath(); ctx.roundRect(-w * 0.22, h * 0.12, w * 0.26, h * 0.42, 3); ctx.fill();
+    ctx.fillStyle = cuffColor;
+    ctx.fillRect(-w * 0.24, h * 0.12, w * 0.3, h * 0.1);
+    // Front boot (animated)
+    ctx.fillStyle = bootColor;
+    ctx.beginPath(); ctx.roundRect(w * 0.0 - legSwing, h * 0.1, w * 0.26, h * 0.44, 3); ctx.fill();
+    ctx.fillStyle = cuffColor;
+    ctx.fillRect(w * 0.0 - legSwing - 0.02 * w, h * 0.1, w * 0.3, h * 0.1);
+
+    // ── Body ──
+    ctx.fillStyle = bodyColor;
     ctx.beginPath();
-    ctx.ellipse(0, 6, w * 0.25, h * 0.28, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, h * 0.04, w * 0.42, h * 0.35, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Chest / belly
+    ctx.fillStyle = hurt ? '#ffe0e0' : st.bellyColor;
+    ctx.beginPath();
+    ctx.ellipse(w * 0.04, h * 0.08, w * 0.22, h * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Belt sash (diagonal)
+    ctx.strokeStyle = '#8B6020'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-w * 0.3, -h * 0.08); ctx.lineTo(w * 0.2, h * 0.18); ctx.stroke();
+    ctx.fillStyle = '#d4a800';
+    ctx.fillRect(-w * 0.05, h * 0.03, 8, 5);
 
     // Tiger stripes (stage 2)
     if (player.evolution === 2) {
-      ctx.strokeStyle = st.earColor;
-      ctx.lineWidth = 2;
-      for (let s = -1; s <= 1; s += 2) {
-        ctx.beginPath();
-        ctx.moveTo(s * 4, -2);
-        ctx.lineTo(s * 8, 4);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(s * 2, 4);
-        ctx.lineTo(s * 7, 10);
-        ctx.stroke();
+      ctx.strokeStyle = '#a03000'; ctx.lineWidth = 2;
+      for (const s of [-1, 1]) {
+        ctx.beginPath(); ctx.moveTo(s * 5, -h * 0.1); ctx.lineTo(s * 10, h * 0.08); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(s * 3, h * 0.1);  ctx.lineTo(s * 9, h * 0.22); ctx.stroke();
       }
     }
 
-    // Head
-    ctx.fillStyle = player.hurtTimer > 0 ? '#ffffff' : st.color;
-    ctx.beginPath();
-    ctx.arc(w * 0.18, -h * 0.28, h * 0.3, 0, Math.PI * 2);
-    ctx.fill();
+    // ── Head ──
+    const hcx = w * 0.1, hcy = -h * 0.3, hr = h * 0.28;
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath(); ctx.arc(hcx, hcy, hr, 0, Math.PI * 2); ctx.fill();
 
-    // Ears
+    // ── Ears ──
     ctx.fillStyle = st.earColor;
-    const earL = { x: w * 0.05, y: -h * 0.52 };
-    const earR = { x: w * 0.35, y: -h * 0.52 };
-    ctx.beginPath();
-    ctx.moveTo(earL.x - 5, earL.y + 8);
-    ctx.lineTo(earL.x, earL.y - 6);
-    ctx.lineTo(earL.x + 8, earL.y + 6);
-    ctx.closePath();
+    ctx.beginPath(); ctx.moveTo(hcx - hr * 0.55, hcy - hr * 0.45);
+    ctx.lineTo(hcx - hr * 0.85, hcy - hr * 1.15); ctx.lineTo(hcx - hr * 0.1, hcy - hr * 0.6);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(hcx + hr * 0.35, hcy - hr * 0.5);
+    ctx.lineTo(hcx + hr * 0.72, hcy - hr * 1.1); ctx.lineTo(hcx + hr * 0.85, hcy - hr * 0.35);
+    ctx.closePath(); ctx.fill();
+
+    // ── Hat (wide-brimmed Zorro/Potté) ──
+    const hatColor = player.evolution === 2 ? '#111' : '#1a1a1a';
+    // Crown
+    ctx.fillStyle = hatColor;
+    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.7, hr * 0.65, hr * 0.55, -0.08, 0, Math.PI * 2);
     ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(earR.x - 2, earR.y + 8);
-    ctx.lineTo(earR.x + 4, earR.y - 6);
-    ctx.lineTo(earR.x + 10, earR.y + 6);
-    ctx.closePath();
+    // Brim (wide!)
+    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.22, hr * 1.5, hr * 0.22, 0.05, 0, Math.PI * 2);
     ctx.fill();
-
-    // Eyes
-    const headCX = w * 0.18;
-    const headCY = -h * 0.28;
-    if (player.hurtTimer > 0) {
-      // Closed/X eyes when hurt
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(headCX + 1, headCY - 2);
-      ctx.lineTo(headCX + 6, headCY + 2);
-      ctx.moveTo(headCX + 6, headCY - 2);
-      ctx.lineTo(headCX + 1, headCY + 2);
-      ctx.stroke();
-    } else if (player.attackTimer > 0) {
-      // Squinted attack eyes
-      ctx.fillStyle = '#222';
-      ctx.beginPath();
-      ctx.ellipse(headCX + 2, headCY, 2, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(headCX + 8, headCY, 2, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // Normal eyes
-      ctx.fillStyle = '#222';
-      ctx.beginPath();
-      ctx.arc(headCX + 2, headCY, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(headCX + 8, headCY, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      // Eyeshine
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(headCX + 3, headCY - 1, 1, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Nose
-    ctx.fillStyle = '#ff8899';
-    ctx.beginPath();
-    ctx.arc(headCX + 10, headCY + 4, 1.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Whiskers
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 0.8;
-    for (let i = -1; i <= 1; i += 2) {
-      ctx.beginPath();
-      ctx.moveTo(headCX + 10, headCY + 4);
-      ctx.lineTo(headCX + 18, headCY + 4 + i * 3);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(headCX + 10, headCY + 4);
-      ctx.lineTo(headCX + 2, headCY + 4 + i * 3);
-      ctx.stroke();
-    }
-
-    // Tail
-    ctx.strokeStyle = st.earColor;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    const tailSwing = isMoving ? Math.sin(tick * 0.2) * 12 : Math.sin(tick * 0.05) * 6;
-    ctx.moveTo(-w * 0.4, 2);
-    ctx.bezierCurveTo(-w * 0.9, -4, -w * 1.1 + tailSwing, -12, -w * 0.9 + tailSwing * 1.4, -20);
+    // Gold band on hat
+    ctx.strokeStyle = '#c4960a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(hcx - hr * 0.05, hcy - hr * 0.3, hr * 0.64, hr * 0.14, -0.08, 0, Math.PI * 2);
     ctx.stroke();
-    // Tail tip
-    ctx.fillStyle = st.earColor;
+    // Feather (red plume)
+    ctx.strokeStyle = '#cc2020'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.arc(-w * 0.9 + tailSwing * 1.4, -20, 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(hcx + hr * 0.55, hcy - hr * 0.4);
+    ctx.quadraticCurveTo(hcx + hr * 1.3, hcy - hr * 1.8, hcx + hr * 0.6, hcy - hr * 2.1);
+    ctx.stroke();
+    ctx.strokeStyle = '#ff5555'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(hcx + hr * 0.65, hcy - hr * 0.45);
+    ctx.quadraticCurveTo(hcx + hr * 1.45, hcy - hr * 1.85, hcx + hr * 0.7, hcy - hr * 2.15);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
 
-    // Legs / paws (animated when moving)
-    ctx.fillStyle = st.earColor;
-    const legSwing = isMoving ? Math.sin(tick * 0.3) : 0;
-    // Front paws
-    ctx.beginPath();
-    ctx.ellipse(w * 0.25, h * 0.38 + legSwing * 3, 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(w * 0.1, h * 0.38 - legSwing * 3, 5, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // ── BIG Eyes (signature Puss in Boots!) ──
+    const elx = hcx - hr * 0.3, erx = hcx + hr * 0.32, ey = hcy + hr * 0.05;
+    const ew = hr * 0.28, eh = hr * 0.34;
 
-    // Attack claws
-    if (player.attackTimer > 0) {
-      const claw_alpha = player.attackTimer / 16;
-      ctx.globalAlpha = claw_alpha;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      const clawX = w * 0.5 + 4;
-      for (let c = 0; c < 3; c++) {
-        const cy2 = -4 + c * 6;
+    if (hurt) {
+      ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+      for (const ex2 of [elx, erx]) {
+        ctx.beginPath(); ctx.moveTo(ex2 - 5, ey - 4); ctx.lineTo(ex2 + 5, ey + 4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex2 + 5, ey - 4); ctx.lineTo(ex2 - 5, ey + 4); ctx.stroke();
+      }
+    } else if (attacking) {
+      // Fierce squinted eyes
+      ctx.fillStyle = '#1a6600';
+      for (const ex2 of [elx, erx]) {
+        ctx.beginPath(); ctx.ellipse(ex2, ey, ew * 0.9, eh * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+      for (const ex2 of [elx, erx]) {
+        ctx.beginPath(); ctx.moveTo(ex2 - ew, ey - eh * 0.5); ctx.lineTo(ex2 + ew, ey - eh * 0.1); ctx.stroke();
+      }
+    } else {
+      // Big round pleading eyes
+      // Whites
+      ctx.fillStyle = '#f8f2e0';
+      ctx.beginPath(); ctx.ellipse(elx, ey, ew, eh, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(erx, ey, ew, eh, 0, 0, Math.PI * 2); ctx.fill();
+      // Iris (vivid green)
+      ctx.fillStyle = '#1a9400';
+      ctx.beginPath(); ctx.ellipse(elx, ey, ew * 0.72, eh * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(erx, ey, ew * 0.72, eh * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+      // Vertical cat pupil
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.ellipse(elx, ey, ew * 0.2, eh * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(erx, ey, ew * 0.2, eh * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      // Eyeshine
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.ellipse(elx - ew * 0.2, ey - eh * 0.3, ew * 0.18, eh * 0.22, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(erx - ew * 0.2, ey - eh * 0.3, ew * 0.18, eh * 0.22, -0.4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ── Nose ──
+    ctx.fillStyle = '#ff8899';
+    ctx.beginPath(); ctx.arc(hcx + hr * 0.06, hcy + hr * 0.32, hr * 0.1, 0, Math.PI * 2); ctx.fill();
+
+    // ── Whiskers ──
+    ctx.strokeStyle = 'rgba(255,255,255,0.72)'; ctx.lineWidth = 0.9;
+    for (const side of [-1, 1]) {
+      for (const off of [-0.12, 0, 0.12]) {
         ctx.beginPath();
-        ctx.moveTo(clawX, cy2);
-        ctx.lineTo(clawX + 14 + c * 2, cy2 - 4 + c * 2);
+        ctx.moveTo(hcx + hr * 0.06, hcy + hr * 0.32 + off * hr);
+        ctx.lineTo(hcx + side * hr * 1.3, hcy + hr * 0.28 + off * hr * 1.4);
         ctx.stroke();
       }
+    }
+
+    // ── Tail ──
+    ctx.strokeStyle = st.earColor; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    const tailSwing = isMoving ? Math.sin(tick * 0.2) * 14 : Math.sin(tick * 0.05) * 7;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.38, h * 0.08);
+    ctx.bezierCurveTo(-w * 0.95, -h * 0.05, -w * 1.15 + tailSwing, -h * 0.28, -w * 0.92 + tailSwing * 1.4, -h * 0.48);
+    ctx.stroke();
+    ctx.fillStyle = st.earColor;
+    ctx.beginPath(); ctx.arc(-w * 0.92 + tailSwing * 1.4, -h * 0.48, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.lineCap = 'butt';
+
+    // ── Sword attack ──
+    if (attacking) {
+      const alpha = player.attackTimer / 16;
+      ctx.save(); ctx.globalAlpha = alpha;
+      // Blade
+      ctx.strokeStyle = '#c8d8e8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(w * 0.35, -h * 0.1); ctx.lineTo(w * 0.35 + 28, -h * 0.1 - 22); ctx.stroke();
+      // Guard (crossguard)
+      ctx.strokeStyle = '#d4a800'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(w * 0.35 + 7, -h * 0.1 - 8); ctx.lineTo(w * 0.35 + 20, -h * 0.1 - 2); ctx.stroke();
+      // Slash arc
+      ctx.strokeStyle = 'rgba(200,240,255,0.7)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(w * 0.3, -h * 0.1, 26, -Math.PI * 0.75, -Math.PI * 0.05); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Stage 2 aura
+    if (player.evolution === 2) {
+      ctx.globalAlpha = 0.1 + Math.sin(tick * 0.08) * 0.05;
+      ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.ellipse(0, 0, w * 0.8, h * 0.8, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
 
@@ -1500,11 +1636,11 @@ class Game {
     // Cat mascot drawing
     this._drawMenuCat(W / 2, H * 0.55);
 
-    // Press Enter
+    // Press Enter / Touch
     const blink = Math.floor(Date.now() / 600) % 2 === 0;
     ctx.font = 'bold 28px monospace';
     ctx.fillStyle = blink ? '#ffffff' : '#aaaaaa';
-    ctx.fillText('Appuyez sur ENTRÉE', W / 2, H * 0.74);
+    ctx.fillText('Touchez l\'écran  ou  ENTRÉE', W / 2, H * 0.74);
 
     // Controls
     ctx.font = '15px monospace';
@@ -1529,84 +1665,111 @@ class Game {
     ctx.save();
     ctx.translate(cx, cy + bob);
 
+    // Cape (behind body)
+    ctx.fillStyle = '#8B1010';
+    ctx.beginPath();
+    ctx.moveTo(-14, -8);
+    ctx.quadraticCurveTo(-52, 10 + Math.sin(t * 0.8) * 5, -38, 38 + Math.sin(t * 0.8) * 3);
+    ctx.lineTo(-6, 30);
+    ctx.lineTo(-6, -10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Boots
+    ctx.fillStyle = '#3a2010';
+    ctx.beginPath(); ctx.roundRect(-20, 24, 18, 28, 3); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(2, 22, 18, 30, 3); ctx.fill();
+    ctx.fillStyle = '#5a3820';
+    ctx.fillRect(-22, 24, 22, 7);
+    ctx.fillRect(0, 22, 22, 7);
+
     // Body
     ctx.fillStyle = '#f0a844';
     ctx.beginPath();
-    ctx.ellipse(0, 10, 28, 22, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 10, 26, 20, 0, 0, Math.PI * 2);
     ctx.fill();
+    // Belly
     ctx.fillStyle = '#ffd090';
     ctx.beginPath();
-    ctx.ellipse(0, 12, 15, 14, 0, 0, Math.PI * 2);
+    ctx.ellipse(2, 12, 14, 13, 0, 0, Math.PI * 2);
     ctx.fill();
+    // Belt sash
+    ctx.strokeStyle = '#8B6020'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-18, -2); ctx.lineTo(14, 16); ctx.stroke();
+    ctx.fillStyle = '#d4a800';
+    ctx.fillRect(-4, 6, 8, 5);
 
     // Head
     ctx.fillStyle = '#f0a844';
     ctx.beginPath();
-    ctx.arc(0, -16, 24, 0, Math.PI * 2);
+    ctx.arc(0, -18, 26, 0, Math.PI * 2);
     ctx.fill();
 
-    // Ears
+    // Ears (under hat brim)
     ctx.fillStyle = '#e08030';
-    ctx.beginPath();
-    ctx.moveTo(-16, -30);
-    ctx.lineTo(-24, -50);
-    ctx.lineTo(-6, -34);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(16, -30);
-    ctx.lineTo(24, -50);
-    ctx.lineTo(6, -34);
-    ctx.closePath();
-    ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-16, -32); ctx.lineTo(-22, -50); ctx.lineTo(-6, -36); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(16, -32); ctx.lineTo(22, -50); ctx.lineTo(6, -36); ctx.closePath(); ctx.fill();
 
-    // Eyes (looking at viewer)
-    ctx.fillStyle = '#222';
+    // Hat brim (wide, over ears)
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.ellipse(0, -36, 42, 10, 0.05, 0, Math.PI * 2); ctx.fill();
+    // Hat crown
+    ctx.beginPath(); ctx.ellipse(0, -50, 22, 18, -0.05, 0, Math.PI * 2); ctx.fill();
+    // Gold band
+    ctx.strokeStyle = '#c4960a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, -37, 21, 5, -0.05, 0, Math.PI * 2); ctx.stroke();
+    // Red feather
+    ctx.strokeStyle = '#cc2020'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.ellipse(-8, -18, 5, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(18, -40);
+    ctx.quadraticCurveTo(46, -70, 24, -82);
+    ctx.stroke();
+    ctx.strokeStyle = '#ff5555'; ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.ellipse(8, -18, 5, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(-6, -20, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(10, -20, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(22, -42);
+    ctx.quadraticCurveTo(50, -72, 28, -84);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // BIG eyes (Puss in Boots signature)
+    const ew = 9, eh = 12;
+    // Whites
+    ctx.fillStyle = '#f8f2e0';
+    ctx.beginPath(); ctx.ellipse(-10, -20, ew, eh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(10, -20, ew, eh, 0, 0, Math.PI * 2); ctx.fill();
+    // Green iris
+    ctx.fillStyle = '#1a9400';
+    ctx.beginPath(); ctx.ellipse(-10, -20, ew * 0.7, eh * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(10, -20, ew * 0.7, eh * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    // Vertical pupil
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.ellipse(-10, -20, ew * 0.2, eh * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(10, -20, ew * 0.2, eh * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    // Eyeshine
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.ellipse(-12, -23, ew * 0.22, eh * 0.25, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(8, -23, ew * 0.22, eh * 0.25, -0.4, 0, Math.PI * 2); ctx.fill();
 
     // Nose
     ctx.fillStyle = '#ff8899';
-    ctx.beginPath();
-    ctx.arc(0, -11, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Smile
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, -8, 6, 0.1, Math.PI - 0.1);
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -11, 3.5, 0, Math.PI * 2); ctx.fill();
 
     // Whiskers
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 1;
     for (const side of [-1, 1]) {
       for (const off of [-4, 0, 4]) {
         ctx.beginPath();
         ctx.moveTo(side * 4, -11 + off);
-        ctx.lineTo(side * 28, -12 + off * 1.5);
+        ctx.lineTo(side * 34, -12 + off * 1.5);
         ctx.stroke();
       }
     }
 
     // Tail
-    ctx.strokeStyle = '#e08030';
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#e08030'; ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.moveTo(26, 10);
-    ctx.bezierCurveTo(40, -10, 50, 10, 40, 24);
+    ctx.moveTo(26, 8);
+    ctx.bezierCurveTo(44, -14, 58, 8, 46, 26);
     ctx.stroke();
 
     ctx.restore();
@@ -1627,7 +1790,7 @@ class Game {
 
     ctx.font = '22px monospace';
     ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('Entrée / Echap : Reprendre', this.W / 2, this.H / 2 + 30);
+    ctx.fillText('Touchez l\'écran / Entrée / Echap : Reprendre', this.W / 2, this.H / 2 + 30);
     ctx.textAlign = 'left';
   }
 
@@ -1651,7 +1814,7 @@ class Game {
     const blink = Math.floor(Date.now() / 700) % 2 === 0;
     ctx.font = '22px monospace';
     ctx.fillStyle = blink ? '#ffffff' : '#888888';
-    ctx.fillText('Appuyez sur ENTRÉE pour recommencer', this.W / 2, this.H / 2 + 70);
+    ctx.fillText('Touchez l\'écran / ENTRÉE pour recommencer', this.W / 2, this.H / 2 + 70);
     ctx.textAlign = 'left';
   }
 
@@ -1698,7 +1861,7 @@ class Game {
     const blink = Math.floor(Date.now() / 700) % 2 === 0;
     ctx.font = '20px monospace';
     ctx.fillStyle = blink ? '#ffffff' : '#888888';
-    ctx.fillText('Appuyez sur ENTRÉE pour rejouer', this.W / 2, this.H / 2 + 120);
+    ctx.fillText('Touchez l\'écran / ENTRÉE pour rejouer', this.W / 2, this.H / 2 + 120);
     ctx.textAlign = 'left';
   }
 }
