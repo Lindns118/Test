@@ -51,20 +51,17 @@ class Game {
       }
       if (e.code === 'Enter') {
         if (this.state === 'menu') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         } else if (this.state === 'paused') {
           this.state = 'playing';
         } else if (this.state === 'gameover') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         } else if (this.state === 'win') {
-          this.levelIndex = 0;
-          this.startLevel(0);
-          this.state = 'playing';
+          this._restartFromLevelOne();
         }
+      }
+      if (e.code === 'KeyN' && this.state === 'gameover') {
+        this._continueCurrentLevel();
       }
     });
 
@@ -89,9 +86,10 @@ class Game {
     const onStart = (e) => {
       e.preventDefault();
 
-      // Menus: tap anywhere to continue
+      // Menus: tap to continue (pass X for gameover choice)
       if (this.state !== 'playing' && this.state !== 'paused') {
-        this._menuTap();
+        const ft = e.changedTouches[0];
+        this._menuTap(ft ? ft.clientX : this.W / 2);
         return;
       }
 
@@ -151,14 +149,36 @@ class Game {
     this.canvas.addEventListener('touchcancel',onEnd,   { passive: false });
   }
 
-  _menuTap() {
+  _menuTap(touchX = this.W / 2) {
     if (this.state === 'menu') {
-      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+      this._restartFromLevelOne();
     } else if (this.state === 'paused') {
       this.state = 'playing';
-    } else if (this.state === 'gameover' || this.state === 'win') {
-      this.levelIndex = 0; this.startLevel(0); this.state = 'playing';
+    } else if (this.state === 'gameover') {
+      // Right half = continue current level, left half = restart from 1
+      if (touchX >= this.W / 2) this._continueCurrentLevel();
+      else this._restartFromLevelOne();
+    } else if (this.state === 'win') {
+      this._restartFromLevelOne();
     }
+  }
+
+  _restartFromLevelOne() {
+    this.levelIndex = 0;
+    this.startLevel(0);
+    this.player.lives     = 3;
+    this.player.score     = 0;
+    this.player.totalFish = 0;
+    this.player.evolution = 0;
+    this.state = 'playing';
+  }
+
+  _continueCurrentLevel() {
+    const idx = this._gameOverLevelIndex || 0;
+    this.levelIndex = idx;
+    this.startLevel(idx); // carries over score/fish/evolution from dead player
+    this.player.lives = 1;
+    this.state = 'playing';
   }
 
   startLevel(idx) {
@@ -318,6 +338,9 @@ class Game {
         } else if (c.type === 'star') {
           player.collectStar();
           this._spawnParticles(c.x + 10, c.y + 10, '#ffee00', 8);
+        } else if (c.type === 'heart') {
+          player.collectHeart();
+          this._spawnParticles(c.x + 10, c.y + 10, '#ff4488', 10);
         }
       }
     }
@@ -338,6 +361,7 @@ class Game {
 
     // Death check
     if (player.dead) {
+      this._gameOverLevelIndex = this.levelIndex;
       this.state = 'gameover';
     }
 
@@ -775,6 +799,23 @@ class Game {
       ctx.beginPath();
       ctx.arc(0, 0, 10, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    } else if (c.type === 'heart') {
+      ctx.save();
+      ctx.translate(c.x + 10, c.y + 10 + pulse);
+      ctx.fillStyle = '#ff2255';
+      ctx.shadowColor = '#ff88aa'; ctx.shadowBlur = 14;
+      const s = 10;
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.35);
+      ctx.bezierCurveTo(0, 0, -s, 0, -s, s * 0.35);
+      ctx.bezierCurveTo(-s, s * 0.75, 0, s * 1.3, 0, s * 1.6);
+      ctx.bezierCurveTo(0, s * 1.3, s, s * 0.75, s, s * 0.35);
+      ctx.bezierCurveTo(s, 0, 0, 0, 0, s * 0.35);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath(); ctx.ellipse(-4, 2, 3, 2, -0.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     } else if (c.type === 'star') {
       // Star: 5-point yellow
@@ -1797,26 +1838,76 @@ class Game {
 
   _drawGameOver() {
     const ctx = this.ctx;
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(0, 0, this.W, this.H);
+    const W = this.W, H = this.H;
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(0, 0, W, H);
 
+    // Title
     ctx.textAlign = 'center';
-    ctx.font = 'bold 72px monospace';
+    ctx.font = `bold ${Math.min(72, W / 8)}px monospace`;
     ctx.fillStyle = '#ff2222';
-    ctx.shadowColor = '#880000';
-    ctx.shadowBlur = 24;
-    ctx.fillText('GAME OVER', this.W / 2, this.H / 2 - 40);
+    ctx.shadowColor = '#880000'; ctx.shadowBlur = 24;
+    ctx.fillText('GAME OVER', W / 2, H * 0.18);
     ctx.shadowBlur = 0;
 
-    ctx.font = 'bold 28px monospace';
+    ctx.font = `bold ${Math.min(24, W / 14)}px monospace`;
     ctx.fillStyle = '#ffaa44';
-    ctx.fillText(`Score final : ${this.player ? this.player.score : 0}`, this.W / 2, this.H / 2 + 20);
+    ctx.fillText(`Score : ${this.player ? this.player.score : 0}`, W / 2, H * 0.3);
 
-    const blink = Math.floor(Date.now() / 700) % 2 === 0;
-    ctx.font = '22px monospace';
-    ctx.fillStyle = blink ? '#ffffff' : '#888888';
-    ctx.fillText('Touchez l\'écran / ENTRÉE pour recommencer', this.W / 2, this.H / 2 + 70);
+    // Divider
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W / 2, H * 0.37); ctx.lineTo(W / 2, H * 0.88); ctx.stroke();
+
+    const blink = Math.floor(Date.now() / 600) % 2 === 0;
+    const lvlName = this.currentLevel ? this.currentLevel.name : '';
+
+    // ── Option gauche : Recommencer Niveau 1 ──
+    ctx.fillStyle = 'rgba(200,50,50,0.12)';
+    ctx.fillRect(0, H * 0.36, W / 2, H * 0.54);
+
+    ctx.font = `bold ${Math.min(20, W / 18)}px monospace`;
+    ctx.fillStyle = '#ff6644';
+    ctx.fillText('Recommencer', W / 4, H * 0.48);
+    ctx.font = `${Math.min(16, W / 22)}px monospace`;
+    ctx.fillStyle = '#ffaa88';
+    ctx.fillText('Niveau 1 — 3 vies', W / 4, H * 0.56);
+    // mini cœurs
+    for (let i = 0; i < 3; i++) this._drawMiniHeart(W / 4 - 22 + i * 22, H * 0.62);
+    ctx.font = `${Math.min(13, W / 26)}px monospace`;
+    ctx.fillStyle = blink ? '#fff' : '#777';
+    ctx.fillText('◀ Gauche / Entrée', W / 4, H * 0.74);
+
+    // ── Option droite : Continuer niveau actuel ──
+    ctx.fillStyle = 'rgba(50,100,220,0.12)';
+    ctx.fillRect(W / 2, H * 0.36, W / 2, H * 0.54);
+
+    ctx.font = `bold ${Math.min(20, W / 18)}px monospace`;
+    ctx.fillStyle = '#4488ff';
+    ctx.fillText('Continuer', W * 3 / 4, H * 0.48);
+    ctx.font = `${Math.min(16, W / 22)}px monospace`;
+    ctx.fillStyle = '#88aaff';
+    ctx.fillText(`${lvlName} — 1 vie`, W * 3 / 4, H * 0.56);
+    this._drawMiniHeart(W * 3 / 4, H * 0.62);
+    ctx.font = `${Math.min(13, W / 26)}px monospace`;
+    ctx.fillStyle = blink ? '#fff' : '#777';
+    ctx.fillText('Droite / N', W * 3 / 4, H * 0.74);
+
     ctx.textAlign = 'left';
+  }
+
+  _drawMiniHeart(x, y, size = 9) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#ff2255';
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.35);
+    ctx.bezierCurveTo(0, 0, -size, 0, -size, size * 0.35);
+    ctx.bezierCurveTo(-size, size * 0.75, 0, size * 1.3, 0, size * 1.6);
+    ctx.bezierCurveTo(0, size * 1.3, size, size * 0.75, size, size * 0.35);
+    ctx.bezierCurveTo(size, 0, 0, 0, 0, size * 0.35);
+    ctx.fill();
+    ctx.restore();
   }
 
   _drawWin() {

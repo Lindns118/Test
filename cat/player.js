@@ -184,6 +184,7 @@ class Player {
 
   collectYarn()  { this.score += 50; }
   collectStar()  { this.score += 200; this.invincible = Math.max(this.invincible, 300); }
+  collectHeart() { this.lives = Math.min(this.lives + 1, 5); this.score += 300; }
 
   addScore(n) { this.score += n; }
 
