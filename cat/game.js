@@ -214,6 +214,27 @@ class Game {
     this.projectiles = [];
     this.flashTimer = 0;
     this.showEvolveMsg = 0;
+
+    // Snap player directly onto ground at spawn position
+    const spawnMidX = lvl.startX + this.player.w / 2;
+    const groundPlatform = lvl.platforms.find(
+      p => spawnMidX >= p.x && spawnMidX <= p.x + p.w
+    );
+    if (groundPlatform) {
+      this.player.y  = groundPlatform.y - this.player.h;
+      this.player.vy = 1; // triggers _resolveVertical landing on first frame
+    }
+
+    // Reset joystick so movement from previous level doesn't carry over
+    if (this._joy) {
+      this._joy.active = false;
+      this._joy.id     = -1;
+      this._joy.dx     = 0;
+      this._joy.dy     = 0;
+    }
+    this._prevJoyUp   = false;
+    this._mobileAttack = false;
+    this._mobileDash   = false;
   }
 
   _loop() {
