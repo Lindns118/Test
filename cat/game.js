@@ -10,14 +10,20 @@ class Game {
     this.player = null;
     this.enemies = [];
     this.collectibles = []; // {type, x, y, w:20, h:20, alive:true}
+    this.projectiles = []; // {x,y,vx,vy,w,h,traveled,alive}
     this.camera = { x: 0 };
     this.particles = []; // {x,y,vx,vy,life,color}
     this.flashTimer = 0;
     this.showEvolveMsg = 0;
     this._prevEvolution = 0;
+    this._gameOverLevelIndex = 0;
+    this._scoreEntryEl = null;
 
     // confetti for win screen
     this.confetti = [];
+
+    // Leaderboard (localStorage)
+    this._lb = this._loadLeaderboard();
 
     this.input = {
       left: false, right: false,
@@ -205,6 +211,7 @@ class Game {
 
     this.camera = { x: 0 };
     this.particles = [];
+    this.projectiles = [];
     this.flashTimer = 0;
     this.showEvolveMsg = 0;
   }
@@ -266,7 +273,41 @@ class Game {
 
     // Update player
     const prevEvolution = player.evolution;
+    const prevAttackTimer = player.attackTimer;
     player.update(this.input, lvl);
+
+    // Stage 2: spawn kitten projectile on new attack
+    if (prevAttackTimer <= 0 && player.attackTimer > 0 && player.evolution === 2) {
+      const dir = player.facingRight ? 1 : -1;
+      this.projectiles.push({
+        x: player.x + (dir > 0 ? player.w : -4),
+        y: player.y + player.h * 0.15,
+        vx: dir * 9, vy: -2.5,
+        w: 20, h: 18, traveled: 0, alive: true,
+      });
+    }
+
+    // Update projectiles
+    for (const pr of this.projectiles) {
+      if (!pr.alive) continue;
+      pr.x += pr.vx; pr.vy += 0.18; pr.y += pr.vy;
+      pr.traveled += Math.abs(pr.vx);
+      if (pr.traveled > 680 || pr.x < -80 || pr.x > lvl.width + 80) { pr.alive = false; continue; }
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        if (pr.x < e.x + e.w && pr.x + pr.w > e.x && pr.y < e.y + e.h && pr.y + pr.h > e.y) {
+          if (e.hurtTimer <= 0) {
+            e.takeHit(2);
+            player.addScore(e.alive ? 30 : e.def.score);
+            if (!e.alive) this._spawnParticles(e.x + e.w / 2, e.y + e.h / 2, '#ff6600', 10);
+          }
+          pr.alive = false;
+          this._spawnParticles(pr.x + 10, pr.y + 9, '#f0a844', 6);
+          break;
+        }
+      }
+    }
+    this.projectiles = this.projectiles.filter(p => p.alive);
 
     // Detect evolution change
     if (player.evolution > prevEvolution) {
@@ -356,6 +397,7 @@ class Game {
         player.won = true;
         this.state = 'win';
         this._initConfetti();
+        setTimeout(() => { if (this.state === 'win') this._showScoreEntry(player.score, player.evolution, this.levelIndex); }, 2200);
       }
     }
 
@@ -363,6 +405,7 @@ class Game {
     if (player.dead) {
       this._gameOverLevelIndex = this.levelIndex;
       this.state = 'gameover';
+      setTimeout(() => { if (this.state === 'gameover') this._showScoreEntry(player.score, player.evolution, this._gameOverLevelIndex); }, 1600);
     }
 
     // Camera: follow player horizontally
@@ -548,6 +591,9 @@ class Game {
 
     // Player
     this._drawCat(this.player);
+
+    // Projectiles (kittens)
+    for (const pr of this.projectiles) this._drawProjectile(pr);
 
     // Exit
     this._drawExit(lvl);
@@ -1517,8 +1563,8 @@ class Game {
           ctx.beginPath(); ctx.moveTo(w * 0.74, -h * 0.06 + ci * 5); ctx.lineTo(w * 0.9, -h * 0.06 + ci * 7); ctx.stroke();
         }
         ctx.lineCap = 'butt';
-      } else {
-        // Stade 1+ : épée
+      } else if (player.evolution === 1) {
+        // Stade 1 : épée
         ctx.strokeStyle = '#c8d8e8'; ctx.lineWidth = 3; ctx.lineCap = 'round';
         ctx.beginPath(); ctx.moveTo(w * 0.35, -h * 0.1); ctx.lineTo(w * 0.35 + 28, -h * 0.1 - 22); ctx.stroke();
         ctx.strokeStyle = '#d4a800'; ctx.lineWidth = 3;
@@ -1526,6 +1572,22 @@ class Game {
         ctx.strokeStyle = 'rgba(200,240,255,0.7)'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(w * 0.3, -h * 0.1, 26, -Math.PI * 0.75, -Math.PI * 0.05); ctx.stroke();
         ctx.lineCap = 'butt';
+      } else {
+        // Stade 2 : pose de lancer de chaton
+        ctx.strokeStyle = st.color; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(w * 0.1, -h * 0.05); ctx.lineTo(w * 0.58, -h * 0.36); ctx.stroke();
+        ctx.lineCap = 'butt';
+        // Petit chaton dans la paume
+        ctx.fillStyle = '#f0a844';
+        ctx.beginPath(); ctx.arc(w * 0.6, -h * 0.38, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e08030';
+        ctx.beginPath(); ctx.moveTo(w * 0.55, -h * 0.43); ctx.lineTo(w * 0.53, -h * 0.49); ctx.lineTo(w * 0.58, -h * 0.43); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(w * 0.63, -h * 0.44); ctx.lineTo(w * 0.66, -h * 0.50); ctx.lineTo(w * 0.68, -h * 0.44); ctx.closePath(); ctx.fill();
+        // Arc de trajectoire (pointillés)
+        ctx.strokeStyle = 'rgba(255,200,100,0.5)'; ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.arc(w * 0.6, -h * 0.1, 36, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke();
+        ctx.setLineDash([]);
       }
       ctx.restore();
     }
@@ -1662,6 +1724,88 @@ class Game {
 
   // ───────────────────────────── MENUS ───────────────────────
 
+  _drawProjectile(proj) {
+    const ctx = this.ctx;
+    const dir = proj.vx > 0 ? 1 : -1;
+    ctx.save();
+    ctx.translate(proj.x + proj.w / 2, proj.y + proj.h / 2);
+    if (dir < 0) ctx.scale(-1, 1);
+    ctx.rotate(Math.atan2(proj.vy, Math.abs(proj.vx)) * 0.4);
+
+    // Sillage
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#f0a844';
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath(); ctx.arc(-i * 7, 0, 8 - i * 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Tête de chaton
+    ctx.fillStyle = '#f0a844';
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.fill();
+    // Oreilles
+    ctx.fillStyle = '#e08030';
+    ctx.beginPath(); ctx.moveTo(-5, -7); ctx.lineTo(-9, -14); ctx.lineTo(-1, -7); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(4, -7); ctx.lineTo(9, -14); ctx.lineTo(1, -7); ctx.closePath(); ctx.fill();
+    // Yeux
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(-3, -1, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(3, -1, 1.5, 0, Math.PI * 2); ctx.fill();
+    // Nez
+    ctx.fillStyle = '#ff8899';
+    ctx.beginPath(); ctx.arc(0, 2, 1, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ── Leaderboard ───────────────────────────────────────────────
+  _loadLeaderboard() {
+    try { return JSON.parse(localStorage.getItem('chatArcade_lb') || '[]'); } catch { return []; }
+  }
+
+  _saveScore(name, score, evolutionIdx, levelNum) {
+    const lb = this._loadLeaderboard();
+    lb.push({ name, score, stage: CAT_STAGES[evolutionIdx].name, level: levelNum, date: new Date().toLocaleDateString('fr-FR') });
+    lb.sort((a, b) => b.score - a.score);
+    lb.splice(10);
+    localStorage.setItem('chatArcade_lb', JSON.stringify(lb));
+    this._lb = lb;
+  }
+
+  _showScoreEntry(score, evolutionIdx, levelIdx) {
+    if (this._scoreEntryEl) return;
+    const savedName = localStorage.getItem('chatArcade_name') || '';
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;color:#fff;';
+    el.innerHTML = `
+      <div style="text-align:center;padding:24px;max-width:340px;width:90%;">
+        <div style="font-size:clamp(20px,5vw,28px);font-weight:bold;color:#ffee00;margin-bottom:6px;">🏆 Score : ${score}</div>
+        <div style="font-size:clamp(14px,3.5vw,18px);color:#aaa;margin-bottom:20px;">Stade : ${CAT_STAGES[evolutionIdx].name} — Niv.${levelIdx + 1}</div>
+        <div style="font-size:clamp(14px,3.5vw,18px);margin-bottom:12px;">Entrez votre nom :</div>
+        <input id="se-name" type="text" maxlength="12" value="${savedName}"
+          style="font-size:clamp(16px,4vw,22px);padding:10px 16px;border-radius:10px;border:2px solid #888;text-align:center;width:100%;box-sizing:border-box;margin-bottom:18px;background:#222;color:#fff;">
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <button id="se-save" style="font-size:clamp(14px,3.5vw,18px);padding:12px 24px;background:#44aa44;border:none;border-radius:10px;color:white;cursor:pointer;font-family:monospace;">💾 Sauvegarder</button>
+          <button id="se-skip" style="font-size:clamp(14px,3.5vw,18px);padding:12px 24px;background:#555;border:none;border-radius:10px;color:white;cursor:pointer;font-family:monospace;">Ignorer</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    this._scoreEntryEl = el;
+    setTimeout(() => { const inp = document.getElementById('se-name'); if (inp) inp.focus(); }, 80);
+    const done = (save) => {
+      if (save) {
+        const name = (document.getElementById('se-name').value || 'Anonyme').trim().substring(0, 12);
+        localStorage.setItem('chatArcade_name', name);
+        this._saveScore(name, score, evolutionIdx, levelIdx + 1);
+      }
+      document.body.removeChild(el);
+      this._scoreEntryEl = null;
+      this.state = 'menu';
+    };
+    document.getElementById('se-save').onclick = () => done(true);
+    document.getElementById('se-skip').onclick  = () => done(false);
+  }
+
   _drawMenu() {
     const ctx = this.ctx;
     const W = this.W, H = this.H;
@@ -1686,39 +1830,54 @@ class Game {
     }
     ctx.globalAlpha = 1;
 
-    // Title shadow
-    ctx.shadowColor = '#ff6600';
-    ctx.shadowBlur = 30;
+    // Title (responsive)
+    const titleSize = Math.min(72, W / 7.5);
+    ctx.shadowColor = '#ff6600'; ctx.shadowBlur = 30;
     ctx.textAlign = 'center';
-    ctx.font = 'bold 72px monospace';
+    ctx.font = `bold ${titleSize}px monospace`;
     ctx.fillStyle = '#f0a844';
-    ctx.fillText('CHAT ARCADE', W / 2, H * 0.28);
+    ctx.fillText('CHAT ARCADE', W / 2, H * 0.22);
     ctx.shadowBlur = 0;
 
     // Subtitle
-    ctx.font = 'bold 22px monospace';
+    ctx.font = `bold ${Math.min(22, W / 17)}px monospace`;
     ctx.fillStyle = '#ffd090';
-    ctx.fillText('Platformer Félin 2D', W / 2, H * 0.38);
+    ctx.fillText('Platformer Félin 2D', W / 2, H * 0.31);
 
-    // Cat mascot drawing
-    this._drawMenuCat(W / 2, H * 0.55);
+    // Cat mascot
+    this._drawMenuCat(W / 2, H * 0.48);
 
     // Press Enter / Touch
     const blink = Math.floor(Date.now() / 600) % 2 === 0;
-    ctx.font = 'bold 28px monospace';
+    ctx.font = `bold ${Math.min(24, W / 14)}px monospace`;
     ctx.fillStyle = blink ? '#ffffff' : '#aaaaaa';
-    ctx.fillText('Touchez l\'écran  ou  ENTRÉE', W / 2, H * 0.74);
+    ctx.fillText('Touchez l\'écran  /  ENTRÉE', W / 2, H * 0.66);
 
-    // Controls
-    ctx.font = '15px monospace';
-    ctx.fillStyle = '#888888';
-    const controls = [
-      '←→ / A,D : Déplacer    ↑ / Espace / W : Sauter',
-      'Z / ↓ : Griffe    Shift / X : Dash (stade 2+)',
-      'Ramasse 6 poissons → Chat    16 poissons → Chat Tigré',
-    ];
-    for (let i = 0; i < controls.length; i++) {
-      ctx.fillText(controls[i], W / 2, H * 0.83 + i * 22);
+    // Controls (adapted to screen width)
+    ctx.font = `${Math.min(13, W / 28)}px monospace`;
+    ctx.fillStyle = '#777';
+    if (W >= 500) {
+      ctx.fillText('←→ Déplacer  ↑/Espace Saut  Z Attaque  Shift Dash', W / 2, H * 0.72);
+      ctx.fillText('6 🐟 → Chat (épée)   16 🐟 → Chat Tigré (chatons)', W / 2, H * 0.755);
+    } else {
+      ctx.fillText('Joystick droit • Bouton gauche : Attaque', W / 2, H * 0.72);
+      ctx.fillText('6 🐟 → Chat   16 🐟 → Chat Tigré', W / 2, H * 0.755);
+    }
+
+    // Leaderboard top 5
+    if (this._lb && this._lb.length > 0) {
+      const lbY = H * 0.80;
+      ctx.font = `bold ${Math.min(14, W / 24)}px monospace`;
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillText('🏆 Top Scores', W / 2, lbY);
+      ctx.font = `${Math.min(12, W / 28)}px monospace`;
+      const show = Math.min(5, this._lb.length);
+      for (let i = 0; i < show; i++) {
+        const e = this._lb[i];
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+        ctx.fillStyle = i === 0 ? '#ffee00' : '#aaaaaa';
+        ctx.fillText(`${medal} ${e.name.substring(0,10).padEnd(10)}  ${e.score}  Niv.${e.level}`, W / 2, lbY + 18 + i * 16);
+      }
     }
 
     ctx.textAlign = 'left';
@@ -1844,20 +2003,17 @@ class Game {
 
   _drawPause() {
     const ctx = this.ctx;
+    const W = this.W, H = this.H;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, this.W, this.H);
-
+    ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center';
-    ctx.font = 'bold 64px monospace';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#4488ff';
-    ctx.shadowBlur = 20;
-    ctx.fillText('PAUSE', this.W / 2, this.H / 2 - 20);
+    ctx.font = `bold ${Math.min(64, W / 5)}px monospace`;
+    ctx.fillStyle = '#ffffff'; ctx.shadowColor = '#4488ff'; ctx.shadowBlur = 20;
+    ctx.fillText('PAUSE', W / 2, H / 2 - 20);
     ctx.shadowBlur = 0;
-
-    ctx.font = '22px monospace';
+    ctx.font = `${Math.min(20, W / 16)}px monospace`;
     ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('Touchez l\'écran / Entrée / Echap : Reprendre', this.W / 2, this.H / 2 + 30);
+    ctx.fillText('Touchez / Entrée / Echap : Reprendre', W / 2, H / 2 + 30);
     ctx.textAlign = 'left';
   }
 
@@ -1937,48 +2093,56 @@ class Game {
 
   _drawWin() {
     const ctx = this.ctx;
+    const W = this.W, H = this.H;
 
     // Confetti
     for (const c of this.confetti) {
-      ctx.save();
-      ctx.translate(c.x, c.y);
-      ctx.rotate(c.rot);
-      ctx.fillStyle = c.color;
-      ctx.globalAlpha = 0.85;
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+      ctx.fillStyle = c.color; ctx.globalAlpha = 0.85;
       ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
       ctx.restore();
     }
     ctx.globalAlpha = 1;
 
-    // Overlay
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, this.W, this.H);
+    ctx.fillRect(0, 0, W, H);
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 60px monospace';
-    ctx.fillStyle = '#ffee00';
-    ctx.shadowColor = '#ff8800';
-    ctx.shadowBlur = 30;
-    ctx.fillText('FELICITATIONS !', this.W / 2, this.H / 2 - 60);
+    ctx.font = `bold ${Math.min(60, W / 6)}px monospace`;
+    ctx.fillStyle = '#ffee00'; ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 30;
+    ctx.fillText('FELICITATIONS !', W / 2, H * 0.22);
     ctx.shadowBlur = 0;
 
-    ctx.font = 'bold 28px monospace';
+    ctx.font = `bold ${Math.min(24, W / 14)}px monospace`;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Vous avez sauvé le quartier !', this.W / 2, this.H / 2);
+    ctx.fillText('Vous avez sauvé le quartier !', W / 2, H * 0.35);
 
-    ctx.font = 'bold 24px monospace';
+    ctx.font = `bold ${Math.min(22, W / 15)}px monospace`;
     ctx.fillStyle = '#ffaa44';
-    ctx.fillText(`Score final : ${this.player ? this.player.score : 0}`, this.W / 2, this.H / 2 + 44);
+    ctx.fillText(`Score final : ${this.player ? this.player.score : 0}`, W / 2, H * 0.45);
 
     const stageName = this.player ? this.player.stage.name : '';
-    ctx.font = '20px monospace';
+    ctx.font = `${Math.min(18, W / 18)}px monospace`;
     ctx.fillStyle = '#ffd090';
-    ctx.fillText(`Stade final : ${stageName}`, this.W / 2, this.H / 2 + 78);
+    ctx.fillText(`Stade : ${stageName}`, W / 2, H * 0.54);
+
+    // Leaderboard top 3
+    if (this._lb && this._lb.length > 0) {
+      ctx.font = `bold ${Math.min(14, W / 24)}px monospace`;
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillText('🏆 Meilleurs scores', W / 2, H * 0.65);
+      ctx.font = `${Math.min(12, W / 28)}px monospace`;
+      for (let i = 0; i < Math.min(3, this._lb.length); i++) {
+        const e = this._lb[i];
+        ctx.fillStyle = i === 0 ? '#ffee00' : '#aaa';
+        ctx.fillText(`${i+1}. ${e.name}  ${e.score}`, W / 2, H * 0.69 + i * 16);
+      }
+    }
 
     const blink = Math.floor(Date.now() / 700) % 2 === 0;
-    ctx.font = '20px monospace';
+    ctx.font = `${Math.min(18, W / 18)}px monospace`;
     ctx.fillStyle = blink ? '#ffffff' : '#888888';
-    ctx.fillText('Touchez l\'écran / ENTRÉE pour rejouer', this.W / 2, this.H / 2 + 120);
+    ctx.fillText('Touchez l\'écran / ENTRÉE pour rejouer', W / 2, H * 0.88);
     ctx.textAlign = 'left';
   }
 }
