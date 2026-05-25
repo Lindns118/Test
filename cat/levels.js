@@ -88,7 +88,7 @@ const LEVELS = [
       { x: 1220, y: 560, w: 48 },
     ],
     enemies: [
-      { type: 'bird',  x: 400,  y: 360 },
+      { type: 'bird',  x: 600,  y: 360 },
       { type: 'mouse', x: 700,  y: 558 },
       { type: 'bird',  x: 1100, y: 300 },
       { type: 'rat',   x: 1400, y: 558 },
@@ -150,7 +150,7 @@ const LEVELS = [
       { x: 1980, y: 560, w: 80 },
     ],
     enemies: [
-      { type: 'rat',   x: 300,  y: 558 },
+      { type: 'rat',   x: 500,  y: 558 },
       { type: 'rat',   x: 700,  y: 558 },
       { type: 'rat',   x: 1100, y: 558 },
       { type: 'rat',   x: 1300, y: 558 },
@@ -211,7 +211,7 @@ const LEVELS = [
       { x: 3300, y: 320, w: 192 },
     ],
     spikes: [
-      { x: 330,  y: 560, w: 56 },
+      { x: 710,  y: 560, w: 56 },
       { x: 700,  y: 560, w: 88 },
       { x: 1140, y: 560, w: 48 },
       { x: 1540, y: 560, w: 48 },
@@ -221,7 +221,7 @@ const LEVELS = [
       { x: 3140, y: 560, w: 48 },
     ],
     enemies: [
-      { type: 'dog',  x: 450,  y: 558 },
+      { type: 'dog',  x: 550,  y: 558 },
       { type: 'rat',  x: 850,  y: 558 },
       { type: 'dog',  x: 1250, y: 558 },
       { type: 'rat',  x: 1500, y: 558 },
@@ -290,7 +290,7 @@ const LEVELS = [
       { x: 3380, y: 560, w: 64 },
     ],
     enemies: [
-      { type: 'dog',  x: 400,  y: 558 },
+      { type: 'dog',  x: 550,  y: 558 },
       { type: 'dog',  x: 800,  y: 558 },
       { type: 'rat',  x: 1100, y: 558 },
       { type: 'dog',  x: 1400, y: 558 },
