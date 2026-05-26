@@ -235,6 +235,13 @@ class Game {
     this._prevJoyUp   = false;
     this._mobileAttack = false;
     this._mobileDash   = false;
+
+    this.checkpoints = (lvl.checkpoints || []).map(cp => ({
+      x: cp.x, y: cp.y, activated: false,
+    }));
+    this.activeCheckpointX = lvl.startX;
+    this.activeCheckpointY = lvl.startY;
+    this.showCheckpointMsg = 0;
   }
 
   _loop() {
@@ -295,6 +302,7 @@ class Game {
     // Update player
     const prevEvolution = player.evolution;
     const prevAttackTimer = player.attackTimer;
+    const prevVy = player.vy;
     player.update(this.input, lvl);
 
     // Stage 2: spawn kitten projectile on new attack
@@ -330,13 +338,13 @@ class Game {
     }
     this.projectiles = this.projectiles.filter(p => p.alive);
 
-    // Chute hors de la map → perd une vie et respawn au départ
+    // Fall into void → respawn at last checkpoint (or level start)
     if (player.y > lvl.height + 80 && !player.dead && player.invincible <= 0) {
       player._takeDamage();
       if (!player.dead) {
-        player.x  = lvl.startX;
-        player.y  = lvl.startY;
-        player.vx = 0; player.vy = 0;
+        player.x  = this.activeCheckpointX;
+        player.y  = this.activeCheckpointY - 20;
+        player.vx = 0; player.vy = 1;
         player.invincible = Math.max(player.invincible, 200);
         this._spawnParticles(player.cx, player.cy, '#ffaa00', 12);
       }
@@ -346,6 +354,28 @@ class Game {
     if (player.evolution > prevEvolution) {
       this.showEvolveMsg = 180;
       this._spawnEvolutionParticles();
+    }
+
+    // STOMP: player was falling fast → kills enemy on landing from above
+    if (!player.dead && prevVy > 2) {
+      const pb  = player.y + player.h;
+      const ppb = pb - prevVy; // where bottom was before this frame
+      for (const e of this.enemies) {
+        if (!e.alive || e.hurtTimer > 0) continue;
+        if (e.def && e.def.isBoss) continue;
+        if (
+          pb >= e.y && ppb <= e.y + 6 &&
+          player.x + player.w * 0.2 < e.x + e.w &&
+          player.x + player.w * 0.8 > e.x
+        ) {
+          const scoreGain = e.def.score;
+          e.takeHit(99);
+          player.vy = -10;
+          player.onGround = false;
+          player.addScore(scoreGain);
+          this._spawnParticles(e.x + e.w / 2, e.y, '#ffee44', 14);
+        }
+      }
     }
 
     // Update enemies
@@ -362,6 +392,7 @@ class Game {
 
     // Spikes: check player collision
     for (const sp of lvl.spikes) {
+      if (player.bootTimer > 0) continue; // spike immunity from boot power-up
       if (player.x < sp.x + sp.w && player.x + player.w > sp.x &&
           player.y + player.h > sp.y && player.y < sp.y + 16) {
         player._takeDamage();
@@ -415,7 +446,27 @@ class Game {
         } else if (c.type === 'heart') {
           player.collectHeart();
           this._spawnParticles(c.x + 10, c.y + 10, '#ff4488', 10);
+        } else if (c.type === 'mushroom') {
+          player.collectMushroom();
+          this._spawnParticles(c.x + 10, c.y + 10, '#ff8800', 10);
+          this.showEvolveMsg = 90;
+        } else if (c.type === 'boot_powerup') {
+          player.collectBoot();
+          this._spawnParticles(c.x + 10, c.y + 10, '#d4a020', 8);
         }
+      }
+    }
+
+    // Checkpoints
+    for (const cp of this.checkpoints) {
+      if (!cp.activated &&
+          Math.abs((player.x + player.w / 2) - cp.x) < 36 &&
+          player.y + player.h >= cp.y - 8) {
+        cp.activated = true;
+        this.activeCheckpointX = cp.x - player.w / 2;
+        this.activeCheckpointY = cp.y - player.h;
+        this._spawnParticles(cp.x, cp.y - 20, '#00ee88', 18);
+        this.showCheckpointMsg = 150;
       }
     }
 
@@ -451,6 +502,7 @@ class Game {
 
     // Evolve msg
     if (this.showEvolveMsg > 0) this.showEvolveMsg--;
+    if (this.showCheckpointMsg > 0) this.showCheckpointMsg--;
 
     // Update particles
     this._updateParticles();
@@ -614,6 +666,11 @@ class Game {
     for (const c of this.collectibles) {
       if (!c.alive) continue;
       this._drawCollectible(c);
+    }
+
+    // Checkpoints
+    for (const cp of this.checkpoints) {
+      this._drawCheckpoint(cp);
     }
 
     // Enemies
@@ -915,6 +972,74 @@ class Game {
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.restore();
+    } else if (c.type === 'mushroom') {
+      ctx.save();
+      ctx.translate(c.x + 10, c.y + 10 + pulse);
+      // Stem
+      ctx.fillStyle = '#f0d8a0';
+      ctx.fillRect(-6, 2, 12, 10);
+      // Cap
+      ctx.fillStyle = '#cc3300';
+      ctx.shadowColor = '#ff5500'; ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(0, -1, 12, Math.PI, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // White dots
+      ctx.fillStyle = '#ffffff';
+      for (const [dx, dy] of [[-4, -5], [4, -6], [0, -2]]) {
+        ctx.beginPath(); ctx.arc(dx, dy, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    } else if (c.type === 'boot_powerup') {
+      ctx.save();
+      ctx.translate(c.x + 10, c.y + 12 + pulse);
+      ctx.fillStyle = '#d4a020';
+      ctx.shadowColor = '#ffcc44'; ctx.shadowBlur = 10;
+      // Sole
+      ctx.fillStyle = '#8a6010';
+      ctx.fillRect(-10, 3, 20, 5);
+      // Boot upper
+      ctx.fillStyle = '#d4a020';
+      ctx.fillRect(-7, -8, 10, 11);
+      // Toe cap
+      ctx.beginPath();
+      ctx.ellipse(4, 4, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // Buckle
+      ctx.strokeStyle = '#ffee88'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(-5, -5, 6, 4);
+      ctx.restore();
+    }
+  }
+
+  _drawCheckpoint(cp) {
+    const ctx = this.ctx;
+    const act = cp.activated;
+    // Pole
+    ctx.strokeStyle = act ? '#aaaaaa' : '#665544';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cp.x, cp.y);
+    ctx.lineTo(cp.x, cp.y - 52);
+    ctx.stroke();
+    // Flag
+    ctx.fillStyle = act ? '#00dd66' : '#886655';
+    if (act) { ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 16; }
+    ctx.beginPath();
+    ctx.moveTo(cp.x + 1, cp.y - 52);
+    ctx.lineTo(cp.x + 22, cp.y - 43);
+    ctx.lineTo(cp.x + 1, cp.y - 34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Star on flag when activated
+    if (act) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText('★', cp.x + 5, cp.y - 40);
     }
   }
 
@@ -1703,6 +1828,32 @@ class Game {
 
     ctx.textAlign = 'left';
 
+    // Power-up timers
+    const player = this.player;
+    if (player.evolutionBoost > 0) {
+      const pct = player.evolutionBoost / 600;
+      const bx = this.W - 120;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx, 10, 108, 18);
+      ctx.fillStyle = '#cc3300';
+      ctx.fillRect(bx + 2, 12, Math.round(104 * pct), 14);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.min(12, this.W / 50)}px monospace`;
+      ctx.fillText('MUSH', bx + 4, 23);
+    }
+    if (player.bootTimer > 0) {
+      const pct = player.bootTimer / 480;
+      const bx = this.W - 120;
+      const by = player.evolutionBoost > 0 ? 32 : 10;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx, by, 108, 18);
+      ctx.fillStyle = '#d4a020';
+      ctx.fillRect(bx + 2, by + 2, Math.round(104 * pct), 14);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.min(12, this.W / 50)}px monospace`;
+      ctx.fillText('BOOT', bx + 4, by + 13);
+    }
+
     // ── Evolution message ──
     if (this.showEvolveMsg > 0) {
       const alpha = Math.min(1, this.showEvolveMsg / 30);
@@ -1722,6 +1873,18 @@ class Game {
       ctx.fillText(this.player.stage.name, 0, 34);
       ctx.shadowBlur = 0;
       ctx.restore();
+    }
+
+    // ── Checkpoint message ──
+    if (this.showCheckpointMsg > 0) {
+      const alpha = Math.min(1, this.showCheckpointMsg / 30);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#00ff88';
+      ctx.font = `bold ${Math.min(28, this.W / 16)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText('CHECKPOINT!', this.W / 2, this.H / 2 - 60);
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
     }
   }
 

@@ -23,11 +23,16 @@ class Player {
     this.animTick = 0;
     this.dead = false;
     this.won = false;
+    this.evolutionBoost = 0; // frames of temporary +1 evolution (mushroom)
+    this.bootTimer = 0;      // frames of spike immunity (boot power-up)
   }
 
-  get stage() { return CAT_STAGES[this.evolution]; }
-  get w()     { return this.stage.w; }
-  get h()     { return this.stage.h; }
+  get stage() {
+    const evo = Math.min(2, this.evolution + (this.evolutionBoost > 0 ? 1 : 0));
+    return CAT_STAGES[evo];
+  }
+  get w()     { return CAT_STAGES[this.evolution].w; }
+  get h()     { return CAT_STAGES[this.evolution].h; }
   get cx()    { return this.x + this.w / 2; }
   get cy()    { return this.y + this.h / 2; }
 
@@ -36,6 +41,8 @@ class Player {
     this.animTick++;
     if (this.invincible > 0) this.invincible--;
     if (this.hurtTimer > 0) this.hurtTimer--;
+    if (this.evolutionBoost > 0) this.evolutionBoost--;
+    if (this.bootTimer > 0) this.bootTimer--;
     if (this.attackTimer > 0) this.attackTimer--;
     if (this.attackCooldown > 0) this.attackCooldown--;
     if (this.dashTimer > 0) this.dashTimer--;
@@ -180,6 +187,8 @@ class Player {
   collectYarn()  { this.score += 50; }
   collectStar()  { this.score += 200; this.invincible = Math.max(this.invincible, 300); }
   collectHeart() { this.lives = Math.min(this.lives + 1, 5); this.score += 300; }
+  collectMushroom() { this.evolutionBoost = Math.max(this.evolutionBoost, 600); this.score += 150; }
+  collectBoot()     { this.bootTimer = Math.max(this.bootTimer, 480); this.score += 100; }
 
   addScore(n) { this.score += n; }
 
