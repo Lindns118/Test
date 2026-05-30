@@ -2,80 +2,15 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Zoo Manager</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mon Projet</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; color: #eee; font-family: monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    h1 { font-size: 2rem; }
+  </style>
 </head>
 <body>
-<div id="app">
-  <canvas id="gameCanvas"></canvas>
-
-  <!-- ═══ DESKTOP: panneau latéral ═══ -->
-  <div id="ui">
-    <div id="resources">
-      <span id="res-money">💵 3 000</span>
-      <span id="res-visitors">👥 0 visiteurs</span>
-      <span id="res-rep">⭐ 40%</span>
-      <span id="res-time">📅 Janvier An 1</span>
-      <div class="res-row ticket-row">
-        <button onclick="game.setTicketPrice(-5)">−</button>
-        <span id="res-ticket">🎫 15💵</span>
-        <button onclick="game.setTicketPrice(+5)">+</button>
-      </div>
-    </div>
-    <div id="top-btns">
-      <button id="speed-btn">▶ x1</button>
-      <button id="restart-btn">🔄 Recommencer</button>
-    </div>
-    <div id="build-panel">
-      <h3>🔨 Construire</h3>
-      <div id="build-buttons"></div>
-    </div>
-    <div id="info-panel">
-      <p id="info-text">Sélectionnez un bâtiment, puis cliquez sur la carte.</p>
-    </div>
-    <div id="log-panel">
-      <h4>Événements</h4>
-      <ul id="event-log"></ul>
-    </div>
-  </div>
-
-  <!-- ═══ MOBILE: HUD en overlay ═══ -->
-  <div id="m-hud">
-    <div id="m-res">
-      <span id="m-money">💵3000</span>
-      <span id="m-visitors">👥0</span>
-      <span id="m-rep">⭐40</span>
-    </div>
-    <div id="m-right">
-      <span id="m-time">Jan An1</span>
-      <button id="m-speed">▶</button>
-      <button id="m-restart">🔄</button>
-    </div>
-  </div>
-
-  <!-- ═══ MOBILE: barre de construction en bas ═══ -->
-  <div id="m-bar">
-    <div id="m-scroll"><!-- boutons générés par JS --></div>
-    <button id="m-cancel" class="hidden">✕</button>
-  </div>
-
-  <!-- ═══ Toast (mobile feedback) ═══ -->
-  <div id="m-toast"></div>
-</div>
-
-<script src="js/constants.js"></script>
-<script src="js/map.js"></script>
-<script src="js/pathfinding.js"></script>
-<script src="js/building.js"></script>
-<script src="js/animal.js"></script>
-<script src="js/inhabitant.js"></script>
-<script src="js/employee.js"></script>
-<script src="js/renderer.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/game.js"></script>
+  <h1>Bonjour 👋</h1>
 </body>
 </html>
