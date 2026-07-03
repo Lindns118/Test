@@ -1,0 +1,39 @@
+name: Fetch flight data
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-flights
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch flight data from Flightradar24
+        env:
+          FR24_API_KEY: ${{ secrets.FR24_API_KEY }}
+          AIRPORT_ICAO: EBLG
+        run: node scripts/fetch-flights.mjs
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/flights.json
+          git diff --quiet --cached || git commit -m "chore: update flight data"
+          git push

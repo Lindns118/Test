@@ -3,14 +3,205 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mon Projet</title>
+  <title>Trafic aérien - Liège Bierset (EBLG)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a2e; color: #eee; font-family: monospace; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    h1 { font-size: 2rem; }
+    html, body { height: 100%; }
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      min-height: 100vh;
+    }
+    #sidebar {
+      width: 280px;
+      flex-shrink: 0;
+      background: #16213e;
+      padding: 1.25rem;
+      overflow-y: auto;
+      border-right: 1px solid #2a2f4a;
+    }
+    #sidebar h1 {
+      font-size: 1.1rem;
+      margin-bottom: 0.25rem;
+    }
+    #sidebar .subtitle {
+      font-size: 0.8rem;
+      color: #9aa4c4;
+      margin-bottom: 1rem;
+    }
+    #updated {
+      font-size: 0.75rem;
+      color: #9aa4c4;
+      margin-bottom: 1rem;
+    }
+    #airlineList {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    #airlineList label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 0.15rem 0;
+    }
+    .toolbar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .toolbar button {
+      background: #2a2f4a;
+      color: #eee;
+      border: none;
+      border-radius: 4px;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .toolbar button:hover { background: #38406a; }
+    #empty-msg {
+      font-size: 0.8rem;
+      color: #9aa4c4;
+      font-style: italic;
+    }
+    #map {
+      flex: 1;
+      min-width: 0;
+    }
+    .plane-icon {
+      font-size: 22px;
+      line-height: 1;
+      text-align: center;
+      filter: drop-shadow(0 0 2px #000);
+    }
+    .leaflet-popup-content { font-size: 0.85rem; }
   </style>
 </head>
 <body>
-  <h1>Bonjour 👋</h1>
+  <div id="sidebar">
+    <h1>✈️ Liège Bierset</h1>
+    <div class="subtitle">Vols en approche (EBLG)</div>
+    <div id="updated">Chargement…</div>
+    <div class="toolbar">
+      <button id="selectAll">Tout cocher</button>
+      <button id="selectNone">Tout décocher</button>
+    </div>
+    <div id="airlineList"></div>
+    <div id="empty-msg" style="display:none;">Aucun vol en approche pour le moment.</div>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const AIRPORT_COORDS = [50.6374, 5.4432]; // EBLG
+    const DATA_URL = 'data/flights.json';
+    const REFRESH_MS = 60 * 1000;
+
+    const map = L.map('map').setView(AIRPORT_COORDS, 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      maxZoom: 18,
+    }).addTo(map);
+
+    L.marker(AIRPORT_COORDS, {
+      title: 'Liège Bierset (EBLG)',
+    }).addTo(map).bindPopup('<strong>Liège Bierset (EBLG)</strong>');
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const selectedAirlines = new Set();
+    let allFlights = [];
+
+    function planeIcon(track) {
+      return L.divIcon({
+        className: '',
+        html: `<div class="plane-icon" style="transform: rotate(${track}deg)">✈️</div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+    }
+
+    function renderAirlineList(airlines) {
+      const list = document.getElementById('airlineList');
+      list.innerHTML = '';
+      airlines.forEach((code) => {
+        if (!selectedAirlines.has(code)) selectedAirlines.add(code);
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.dataset.airline = code;
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) selectedAirlines.add(code);
+          else selectedAirlines.delete(code);
+          renderMarkers();
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(code || 'Inconnu'));
+        list.appendChild(label);
+      });
+    }
+
+    function renderMarkers() {
+      markersLayer.clearLayers();
+      const visible = allFlights.filter((f) => selectedAirlines.has(f.airline || ''));
+      visible.forEach((f) => {
+        const marker = L.marker([f.lat, f.lon], { icon: planeIcon(f.track) });
+        marker.bindPopup(`
+          <strong>${f.callsign || 'Vol inconnu'}</strong><br>
+          Compagnie: ${f.airline || 'Inconnue'}<br>
+          Origine: ${f.origin || '—'}<br>
+          Altitude: ${f.altitude ?? '—'} ft<br>
+          Vitesse: ${f.speed ?? '—'} kt
+          ${f.eta ? `<br>ETA: ${new Date(f.eta).toLocaleTimeString('fr-FR')}` : ''}
+        `);
+        marker.addTo(markersLayer);
+      });
+      document.getElementById('empty-msg').style.display = allFlights.length === 0 ? 'block' : 'none';
+    }
+
+    async function loadData() {
+      try {
+        const res = await fetch(`${DATA_URL}?t=${Date.now()}`);
+        const data = await res.json();
+        allFlights = data.flights || [];
+
+        const updatedEl = document.getElementById('updated');
+        updatedEl.textContent = data.updatedAt
+          ? `Mis à jour : ${new Date(data.updatedAt).toLocaleTimeString('fr-FR')}`
+          : 'En attente de la première synchronisation (voir GitHub Actions)';
+
+        const airlines = [...new Set(allFlights.map((f) => f.airline || ''))].sort();
+        renderAirlineList(airlines);
+        renderMarkers();
+      } catch (err) {
+        document.getElementById('updated').textContent = 'Erreur de chargement des données';
+        console.error(err);
+      }
+    }
+
+    document.getElementById('selectAll').addEventListener('click', () => {
+      document.querySelectorAll('#airlineList input').forEach((cb) => {
+        cb.checked = true;
+        selectedAirlines.add(cb.dataset.airline);
+      });
+      renderMarkers();
+    });
+    document.getElementById('selectNone').addEventListener('click', () => {
+      document.querySelectorAll('#airlineList input').forEach((cb) => {
+        cb.checked = false;
+        selectedAirlines.delete(cb.dataset.airline);
+      });
+      renderMarkers();
+    });
+
+    loadData();
+    setInterval(loadData, REFRESH_MS);
+  </script>
 </body>
 </html>
